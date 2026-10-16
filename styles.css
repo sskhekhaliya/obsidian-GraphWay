@@ -1,0 +1,508 @@
+/* GraphWay: Blender / ComfyUI Node-Graph Canvas Aesthetics */
+
+.graphway-canvas-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--background-primary);
+  user-select: none;
+  font-family: var(--font-interface);
+  position: relative;
+}
+
+/* 1. Header Toolbar */
+.graphway-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--background-secondary-alt);
+  border-bottom: 1px solid var(--background-modifier-border);
+  z-index: 50;
+  backdrop-filter: blur(8px);
+  gap: 12px;
+}
+
+.graphway-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphway-title {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  color: var(--text-normal);
+  background: linear-gradient(135deg, var(--interactive-accent), #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.graphway-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphway-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.15s ease-in-out;
+}
+
+.graphway-btn:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  color: var(--text-accent);
+}
+
+.graphway-btn-primary {
+  background: linear-gradient(135deg, var(--interactive-accent), #7c3aed);
+  color: #ffffff;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+}
+
+.graphway-btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.5);
+  color: #ffffff;
+}
+
+.graphway-search-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.graphway-search-input {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-normal);
+  outline: none;
+  width: 180px;
+  transition: width 0.2s ease, border-color 0.2s ease;
+}
+
+.graphway-search-input:focus {
+  border-color: var(--interactive-accent);
+  width: 240px;
+}
+
+/* 2. Viewport & Canvas Background (Dot-grid like Blender / ComfyUI) */
+.graphway-viewport {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--background-primary);
+  background-image: radial-gradient(var(--background-modifier-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+  cursor: default;
+}
+
+.graphway-canvas-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  pointer-events: none; /* children re-enable pointer-events */
+}
+
+/* 3. SVG Layer for Bezier Wires */
+.graphway-svg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8000px;
+  height: 8000px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.graphway-wire {
+  fill: none;
+  stroke: var(--interactive-accent);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
+  filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.4));
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.graphway-wire-indexed {
+  stroke: var(--interactive-accent);
+}
+
+.graphway-wire-unindexed {
+  stroke: #f59e0b;
+  stroke-dasharray: 6 3;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.5));
+}
+
+.graphway-wire:hover {
+  stroke: #ef4444 !important;
+  stroke-width: 3.5px;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+}
+
+.graphway-wire-custom {
+  stroke: #10b981;
+  stroke-dasharray: 6 3;
+  filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.5));
+}
+
+.graphway-unindexed-name {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.graphway-wire-temp {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 3px;
+  stroke-dasharray: 4 4;
+  animation: graphway-dash 1s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.6));
+}
+
+@keyframes graphway-dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+/* 4. Nodes Layer & Node Cards */
+.graphway-nodes-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.graphway-node-card {
+  position: absolute;
+  width: 280px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  user-select: none;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.graphway-node-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.graphway-node-selected {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px #38bdf8, 0 10px 32px rgba(56, 189, 248, 0.45) !important;
+  z-index: 25 !important;
+}
+
+.graphway-selection-box {
+  position: absolute;
+  border: 1.5px dashed #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  pointer-events: none;
+  z-index: 100;
+  border-radius: 4px;
+}
+
+/* Node Header */
+.graphway-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--background-secondary-alt);
+  border-top-left-radius: 9px;
+  border-top-right-radius: 9px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: grab;
+}
+
+.graphway-node-header:active {
+  cursor: grabbing;
+}
+
+.graphway-node-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  max-width: 175px;
+}
+
+.graphway-node-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.graphway-node-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graphway-node-index-subtitle {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.graphway-node-index-subtitle:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.graphway-node-no-index {
+  font-size: 10px;
+  color: #f59e0b;
+  font-style: italic;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s ease;
+}
+
+.graphway-node-no-index:hover {
+  color: #fbbf24;
+  text-decoration: underline;
+}
+
+.graphway-child-folder-row {
+  background: rgba(124, 58, 237, 0.08);
+  border-left: 2px solid var(--interactive-accent);
+}
+
+.graphway-child-folder-row:hover {
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.graphway-child-folder-name {
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.graphway-mini-open {
+  margin-left: auto;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.graphway-mini-open:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.graphway-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.graphway-badge-ok {
+  background: rgba(16, 185, 129, 0.18);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.graphway-badge-warn {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.graphway-badge-homepage {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(168, 85, 247, 0.25));
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+}
+
+.graphway-node-homepage {
+  border: 1.5px solid rgba(251, 191, 36, 0.45);
+  box-shadow: 0 10px 32px rgba(245, 158, 11, 0.2), 0 0 16px rgba(168, 85, 247, 0.15);
+}
+
+.graphway-node-homepage .graphway-node-header {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(124, 58, 237, 0.12));
+}
+
+.graphway-node-homepage .graphway-node-title {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.graphway-badge-warn:hover {
+  background: rgba(245, 158, 11, 0.35);
+}
+
+/* Node Sockets (Blender / ComfyUI Connection Pins) */
+.graphway-socket {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--background-secondary);
+  border: 2px solid var(--interactive-accent);
+  box-shadow: 0 0 6px rgba(124, 58, 237, 0.5);
+  cursor: crosshair;
+  z-index: 30;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.graphway-socket:hover {
+  transform: scale(1.35);
+  background: var(--interactive-accent);
+  box-shadow: 0 0 10px var(--interactive-accent);
+}
+
+.graphway-socket-in {
+  left: -7px;
+  top: 15px;
+  border-color: #38bdf8;
+}
+
+.graphway-socket-in:hover {
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+}
+
+.graphway-socket-out {
+  right: -7px;
+  top: 15px;
+  border-color: #a855f7;
+}
+
+.graphway-socket-out:hover {
+  background: #a855f7;
+  box-shadow: 0 0 10px #a855f7;
+}
+
+.graphway-socket-item-in {
+  position: relative;
+  width: 11px;
+  height: 11px;
+  margin-left: auto;
+  border-radius: 50%;
+  cursor: crosshair;
+  background: var(--background-secondary);
+  border: 2px solid #06b6d4;
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.graphway-socket-item-in:hover {
+  transform: scale(1.4);
+  background: #06b6d4;
+  box-shadow: 0 0 10px #06b6d4;
+}
+
+.graphway-wire-folder-to-file {
+  stroke: #06b6d4;
+  stroke-dasharray: 5 3;
+  filter: drop-shadow(0 0 5px rgba(6, 182, 212, 0.6));
+}
+
+/* Node Body & File List */
+.graphway-node-body {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.graphway-item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.graphway-item-row:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.graphway-item-name {
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.graphway-item-name:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.graphway-empty-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-style: italic;
+  padding: 4px;
+}
+
+.graphway-empty-msg {
+  position: absolute;
+  top: 100px;
+  left: 100px;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  padding: 16px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}

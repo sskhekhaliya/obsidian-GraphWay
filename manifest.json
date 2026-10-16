@@ -1,0 +1,11 @@
+{
+  "id": "graphway",
+  "name": "GraphWay",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Visual, auto-updating MOC and Graph hierarchy generator. Turn folder structures into connected Graph View nodes with one-click vault generation and an interactive node canvas.",
+  "author": "SSKhekhaliya",
+  "authorUrl": "https://www.sskhekhaliya.in/",
+  "fundingUrl": "https://buymeacoffee.com/sskhekhaliya",
+  "isDesktopOnly": false
+}

@@ -1,0 +1,27 @@
+{
+  "name": "obsidian-graphway",
+  "version": "1.0.0",
+  "description": "Visual, auto-updating MOC and Graph hierarchy generator for Obsidian. Connects folders to Graph View with dynamic wikilinks, one-click vault generation, and an interactive node-canvas GUI.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "graph-view",
+    "moc",
+    "waypoint",
+    "folder-notes",
+    "wikilinks",
+    "node-canvas",
+    "hierarchy"
+  ],
+  "author": {
+    "name": "SSKhekhaliya",
+    "url": "https://www.sskhekhaliya.in/"
+  },
+  "license": "MIT"
+}
