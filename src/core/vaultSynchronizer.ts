@@ -163,7 +163,14 @@ export class VaultSynchronizer {
    * Explicitly creates a missing folder note for a folder, populates it, and syncs
    */
   public async createFolderNoteForFolder(folder: TFolder): Promise<TFile | null> {
-    const isRoot = folder.path === '/' || folder.isRoot();
+    const isRoot = folder.path === '/' || folder.isRoot() || folder.path === '';
+    // Un-mark folder as unindexed
+    if (this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
+        p => p !== folder.path && (!isRoot || (p !== '/' && p !== ''))
+      );
+    }
+
     let targetPath = '';
 
     if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
@@ -199,6 +206,43 @@ export class VaultSynchronizer {
     }
 
     return null;
+  }
+
+  /**
+   * Un-indexes a folder:
+   * Strips the GraphWay block from the index note,
+   * Marks folder as unindexed,
+   * Cleans homepage / custom folder notes if applicable,
+   * Re-syncs remaining indices.
+   */
+  public async detachFolderNote(folderPath: string, indexFilePath?: string | null): Promise<boolean> {
+    const isRoot = folderPath === '/' || folderPath === '';
+
+    if (indexFilePath) {
+      const file = this.app.vault.getAbstractFileByPath(indexFilePath);
+      if (file instanceof TFile) {
+        await this.generator.removeBlockFromFile(file);
+      }
+    }
+
+    if (!this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = [];
+    }
+    if (!this.settings.unindexedFolderPaths.includes(folderPath)) {
+      this.settings.unindexedFolderPaths.push(folderPath);
+    }
+    if (isRoot) {
+      if (!this.settings.unindexedFolderPaths.includes('/')) this.settings.unindexedFolderPaths.push('/');
+      if (!this.settings.unindexedFolderPaths.includes('')) this.settings.unindexedFolderPaths.push('');
+      this.settings.homepageNotePath = '';
+    }
+
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath]) {
+      delete this.settings.customFolderNotes[folderPath];
+    }
+
+    await this.syncExistingIndices();
+    return true;
   }
 
   /**

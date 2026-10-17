@@ -128,23 +128,65 @@ export class MarkdownGenerator {
     }
 
     if (lines.length === 0) {
-      lines.push('*(No child notes or folders)*');
+      return '';
     }
 
     return lines.join('\n');
   }
 
   /**
-   * Updates an existing note file with the new GraphWay block.
-   * If the block already exists, only the text between Begin and End markers is updated.
-   * If not, the block is appended or inserted cleanly.
+   * Cleanly removes the GraphWay block from a file if present.
    */
-  public async updateFileContent(file: TFile, node: FolderHierarchyNode): Promise<boolean> {
+  public async removeBlockFromFile(file: TFile): Promise<boolean> {
     const currentContent = await this.app.vault.read(file);
     const beginMarker = this.settings.beginMarker;
     const endMarker = this.settings.endMarker;
 
+    const startIndex = currentContent.indexOf(beginMarker);
+    const endIndex = currentContent.indexOf(endMarker);
+
+    if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
+      const before = currentContent.substring(0, startIndex);
+      const after = currentContent.substring(endIndex + endMarker.length);
+
+      const trimmedBefore = before.replace(/\r?\n\s*$/, '');
+      const trimmedAfter = after.replace(/^\s*\r?\n/, '');
+
+      let updatedContent = '';
+      if (trimmedBefore.length > 0 && trimmedAfter.length > 0) {
+        updatedContent = `${trimmedBefore}\n\n${trimmedAfter}`;
+      } else if (trimmedBefore.length > 0) {
+        updatedContent = `${trimmedBefore}\n`;
+      } else if (trimmedAfter.length > 0) {
+        updatedContent = `${trimmedAfter}`;
+      }
+
+      if (updatedContent !== currentContent) {
+        await this.app.vault.modify(file, updatedContent);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Updates an existing note file with the new GraphWay block.
+   * If there is no content to render (empty block), any existing block is removed completely.
+   * If the block already exists, only the text between Begin and End markers is updated.
+   * If not, the block is appended or inserted cleanly.
+   */
+  public async updateFileContent(file: TFile, node: FolderHierarchyNode): Promise<boolean> {
     const newBlockContent = this.generateBlockContent(node);
+
+    // If there is nothing to render, do NOT write an empty block or placeholder!
+    // Instead, remove any existing block so nothing is shown.
+    if (newBlockContent.trim().length === 0) {
+      return await this.removeBlockFromFile(file);
+    }
+
+    const currentContent = await this.app.vault.read(file);
+    const beginMarker = this.settings.beginMarker;
+    const endMarker = this.settings.endMarker;
     const fullBlock = `${beginMarker}\n${newBlockContent}\n${endMarker}`;
 
     const startIndex = currentContent.indexOf(beginMarker);

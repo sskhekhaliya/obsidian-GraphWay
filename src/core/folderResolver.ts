@@ -105,6 +105,16 @@ export class FolderResolver {
    * Finds the folder note for a given TFolder, if one exists.
    */
   public findFolderNote(folder: TFolder): TFile | null {
+    const isRoot = folder.path === '/' || folder.isRoot() || folder.path === '';
+    if (this.settings.unindexedFolderPaths) {
+      if (
+        this.settings.unindexedFolderPaths.includes(folder.path) ||
+        (isRoot && (this.settings.unindexedFolderPaths.includes('/') || this.settings.unindexedFolderPaths.includes('')))
+      ) {
+        return null;
+      }
+    }
+
     // 1. Check custom explicitly assigned folder index note
     if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
       const customPath = this.settings.customFolderNotes[folder.path];

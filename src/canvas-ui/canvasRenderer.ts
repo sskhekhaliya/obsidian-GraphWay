@@ -577,18 +577,18 @@ export class CanvasRenderer {
 
     const headerActions = header.createDiv({ cls: 'graphway-node-header-actions' });
 
-    // File visibility toggle button (to include or exclude direct files in this folder's index note)
+    // File visibility toggle button (Rendered vs Unrendered direct files in index note)
     if (node.hasIndex || node.directFiles.length > 0) {
-      const eyeBtn = headerActions.createSpan({
+      const renderBtn = headerActions.createSpan({
         cls: `graphway-file-toggle ${isFilesHidden ? 'graphway-file-toggle-off' : 'graphway-file-toggle-on'}`
       });
-      eyeBtn.createSpan({ text: isFilesHidden ? '🚫' : '👁️', cls: 'graphway-toggle-icon' });
-      eyeBtn.createSpan({ text: 'Files', cls: 'graphway-toggle-label' });
-      eyeBtn.title = isFilesHidden
-        ? `Direct files are HIDDEN in "${node.folderName}" index note.\nClick to render files inside index note.`
-        : `Direct files are RENDERED in "${node.folderName}" index note.\nClick to hide files from index note.`;
+      renderBtn.createSpan({ text: isFilesHidden ? '🚫' : '👁️', cls: 'graphway-toggle-icon' });
+      renderBtn.createSpan({ text: isFilesHidden ? 'Unrendered' : 'Rendered', cls: 'graphway-toggle-label' });
+      renderBtn.title = isFilesHidden
+        ? `Direct files are UNRENDERED in "${node.folderName}" index note (GraphWay block removed if empty).\nClick to render files.`
+        : `Direct files are RENDERED in "${node.folderName}" index note.\nClick to unrender direct files.`;
 
-      eyeBtn.onclick = async (e) => {
+      renderBtn.onclick = async (e) => {
         e.stopPropagation();
         if (!this.settings.foldersHidingDirectFiles) {
           this.settings.foldersHidingDirectFiles = [];
@@ -600,7 +600,7 @@ export class CanvasRenderer {
           new Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
         } else {
           this.settings.foldersHidingDirectFiles.push(node.folderPath);
-          new Notice(`GraphWay: Direct files hidden from "${node.folderName}" index note.`);
+          new Notice(`GraphWay: Direct files unrendered from "${node.folderName}" index note.`);
         }
         await this.onSettingsChange();
         await this.synchronizer.syncExistingIndices();
@@ -619,12 +619,16 @@ export class CanvasRenderer {
       text: isHomepage ? '🏠 HOMEPAGE' : node.hasIndex ? 'INDEXED' : 'NO INDEX'
     });
     badge.title = node.hasIndex
-      ? `Folder Note: ${node.indexFilePath}\nClick to open`
+      ? `Click to un-index (detach index note and convert to normal note)`
       : 'Click to create folder index note';
 
     badge.onclick = async (e) => {
       e.stopPropagation();
-      await this.handleCreateOrOpenIndex(node);
+      if (node.hasIndex) {
+        await this.handleDetachIndex(node);
+      } else {
+        await this.handleCreateOrOpenIndex(node);
+      }
     };
 
 
@@ -738,10 +742,10 @@ export class CanvasRenderer {
           const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-files-hidden-row' });
           itemRow.createSpan({ text: '🚫', cls: 'graphway-item-icon' });
           const nameSpan = itemRow.createSpan({
-            text: `${node.directFiles.length} direct file(s) hidden from index`,
+            text: `${node.directFiles.length} direct file(s) unrendered`,
             cls: 'graphway-item-name graphway-files-hidden-label'
           });
-          nameSpan.title = 'Click to show direct files in index note';
+          nameSpan.title = 'Click to render direct files in index note';
           nameSpan.onclick = async () => {
             this.settings.foldersHidingDirectFiles = (this.settings.foldersHidingDirectFiles || []).filter(
               p => p !== node.folderPath
@@ -1143,8 +1147,16 @@ export class CanvasRenderer {
       return;
     }
 
+    const isRoot = node.folderPath === '/' || node.folderPath === '';
+    if (this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
+        p => p !== node.folderPath && (!isRoot || (p !== '/' && p !== ''))
+      );
+      await this.onSettingsChange();
+    }
+
     let folder: TFolder | null = null;
-    if (node.folderPath === '/' || node.folderPath === '') {
+    if (isRoot) {
       folder = this.app.vault.getRoot();
     } else {
       const abstractFolder = this.app.vault.getAbstractFileByPath(node.folderPath);
@@ -1156,7 +1168,7 @@ export class CanvasRenderer {
     if (folder) {
       const newFile = await this.synchronizer.createFolderNoteForFolder(folder);
       if (newFile) {
-        if ((node.folderPath === '/' || node.folderPath === '') && !this.settings.homepageNotePath) {
+        if (isRoot && !this.settings.homepageNotePath) {
           this.settings.homepageNotePath = newFile.path;
           await this.onSettingsChange();
         }
@@ -1168,9 +1180,27 @@ export class CanvasRenderer {
   }
 
   /**
+   * Un-indexes a folder note, converting it back to a normal note and updating the canvas
+   */
+  private async handleDetachIndex(node: FolderHierarchyNode): Promise<void> {
+    await this.synchronizer.detachFolderNote(node.folderPath, node.indexFilePath);
+    await this.onSettingsChange();
+    const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    this.updateData(hierarchy);
+    new Notice(`GraphWay: Un-indexed "${node.folderName}". Converted index to normal note.`);
+  }
+
+  /**
    * Assigns a specific file as the custom index note for a folder
    */
   private async setFileAsFolderIndex(folderPath: string, filePath: string): Promise<void> {
+    const isRoot = folderPath === '/' || folderPath === '';
+    if (this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
+        p => p !== folderPath && (!isRoot || (p !== '/' && p !== ''))
+      );
+    }
+
     if (!this.settings.customFolderNotes) {
       this.settings.customFolderNotes = {};
     }

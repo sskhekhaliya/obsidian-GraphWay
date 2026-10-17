@@ -48,6 +48,7 @@ var DEFAULT_SETTINGS = {
   customLinkOverrides: {},
   customFolderNotes: {},
   foldersHidingDirectFiles: [],
+  unindexedFolderPaths: [],
   nodePositions: {}
 };
 
@@ -124,6 +125,12 @@ var FolderResolver = class _FolderResolver {
    * Finds the folder note for a given TFolder, if one exists.
    */
   findFolderNote(folder) {
+    const isRoot = folder.path === "/" || folder.isRoot() || folder.path === "";
+    if (this.settings.unindexedFolderPaths) {
+      if (this.settings.unindexedFolderPaths.includes(folder.path) || isRoot && (this.settings.unindexedFolderPaths.includes("/") || this.settings.unindexedFolderPaths.includes(""))) {
+        return null;
+      }
+    }
     if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
       const customPath = this.settings.customFolderNotes[folder.path];
       const customFile = this.vault.getAbstractFileByPath(customPath);
@@ -256,16 +263,19 @@ var HierarchyBuilder = class {
     }
     let folderNote = null;
     let folderDisplayName = folder.name || "Root";
-    const isRoot = folder.path === "/" || folder.isRoot();
+    const isRoot = folder.path === "/" || folder.isRoot() || folder.path === "";
+    const isExplicitlyUnindexed = Boolean(
+      this.settings.unindexedFolderPaths && (this.settings.unindexedFolderPaths.includes(folder.path) || isRoot && (this.settings.unindexedFolderPaths.includes("/") || this.settings.unindexedFolderPaths.includes("")))
+    );
     if (isRoot) {
-      if (this.settings.homepageNotePath) {
+      if (!isExplicitlyUnindexed && this.settings.homepageNotePath) {
         const hp = this.app.vault.getAbstractFileByPath(this.settings.homepageNotePath);
         if (hp instanceof import_obsidian2.TFile) {
           folderNote = hp;
           folderDisplayName = hp.basename || "Homepage";
         }
       }
-    } else {
+    } else if (!isExplicitlyUnindexed) {
       folderNote = this.resolver.findFolderNote(folder);
     }
     const directFiles = [];
@@ -461,20 +471,56 @@ var MarkdownGenerator = class {
       for (const u of unindexedLines) lines.push(u);
     }
     if (lines.length === 0) {
-      lines.push("*(No child notes or folders)*");
+      return "";
     }
     return lines.join("\n");
   }
   /**
+   * Cleanly removes the GraphWay block from a file if present.
+   */
+  async removeBlockFromFile(file) {
+    const currentContent = await this.app.vault.read(file);
+    const beginMarker = this.settings.beginMarker;
+    const endMarker = this.settings.endMarker;
+    const startIndex = currentContent.indexOf(beginMarker);
+    const endIndex = currentContent.indexOf(endMarker);
+    if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
+      const before = currentContent.substring(0, startIndex);
+      const after = currentContent.substring(endIndex + endMarker.length);
+      const trimmedBefore = before.replace(/\r?\n\s*$/, "");
+      const trimmedAfter = after.replace(/^\s*\r?\n/, "");
+      let updatedContent = "";
+      if (trimmedBefore.length > 0 && trimmedAfter.length > 0) {
+        updatedContent = `${trimmedBefore}
+
+${trimmedAfter}`;
+      } else if (trimmedBefore.length > 0) {
+        updatedContent = `${trimmedBefore}
+`;
+      } else if (trimmedAfter.length > 0) {
+        updatedContent = `${trimmedAfter}`;
+      }
+      if (updatedContent !== currentContent) {
+        await this.app.vault.modify(file, updatedContent);
+        return true;
+      }
+    }
+    return false;
+  }
+  /**
    * Updates an existing note file with the new GraphWay block.
+   * If there is no content to render (empty block), any existing block is removed completely.
    * If the block already exists, only the text between Begin and End markers is updated.
    * If not, the block is appended or inserted cleanly.
    */
   async updateFileContent(file, node) {
+    const newBlockContent = this.generateBlockContent(node);
+    if (newBlockContent.trim().length === 0) {
+      return await this.removeBlockFromFile(file);
+    }
     const currentContent = await this.app.vault.read(file);
     const beginMarker = this.settings.beginMarker;
     const endMarker = this.settings.endMarker;
-    const newBlockContent = this.generateBlockContent(node);
     const fullBlock = `${beginMarker}
 ${newBlockContent}
 ${endMarker}`;
@@ -637,7 +683,12 @@ var VaultSynchronizer = class {
    * Explicitly creates a missing folder note for a folder, populates it, and syncs
    */
   async createFolderNoteForFolder(folder) {
-    const isRoot = folder.path === "/" || folder.isRoot();
+    const isRoot = folder.path === "/" || folder.isRoot() || folder.path === "";
+    if (this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
+        (p) => p !== folder.path && (!isRoot || p !== "/" && p !== "")
+      );
+    }
     let targetPath = "";
     if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
       targetPath = this.settings.customFolderNotes[folder.path];
@@ -666,6 +717,38 @@ var VaultSynchronizer = class {
       return file;
     }
     return null;
+  }
+  /**
+   * Un-indexes a folder:
+   * Strips the GraphWay block from the index note,
+   * Marks folder as unindexed,
+   * Cleans homepage / custom folder notes if applicable,
+   * Re-syncs remaining indices.
+   */
+  async detachFolderNote(folderPath, indexFilePath) {
+    const isRoot = folderPath === "/" || folderPath === "";
+    if (indexFilePath) {
+      const file = this.app.vault.getAbstractFileByPath(indexFilePath);
+      if (file instanceof import_obsidian4.TFile) {
+        await this.generator.removeBlockFromFile(file);
+      }
+    }
+    if (!this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = [];
+    }
+    if (!this.settings.unindexedFolderPaths.includes(folderPath)) {
+      this.settings.unindexedFolderPaths.push(folderPath);
+    }
+    if (isRoot) {
+      if (!this.settings.unindexedFolderPaths.includes("/")) this.settings.unindexedFolderPaths.push("/");
+      if (!this.settings.unindexedFolderPaths.includes("")) this.settings.unindexedFolderPaths.push("");
+      this.settings.homepageNotePath = "";
+    }
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath]) {
+      delete this.settings.customFolderNotes[folderPath];
+    }
+    await this.syncExistingIndices();
+    return true;
   }
   /**
    * Updates only a specific folder note
@@ -1304,15 +1387,15 @@ Right-click for options`;
     );
     const headerActions = header.createDiv({ cls: "graphway-node-header-actions" });
     if (node.hasIndex || node.directFiles.length > 0) {
-      const eyeBtn = headerActions.createSpan({
+      const renderBtn = headerActions.createSpan({
         cls: `graphway-file-toggle ${isFilesHidden ? "graphway-file-toggle-off" : "graphway-file-toggle-on"}`
       });
-      eyeBtn.createSpan({ text: isFilesHidden ? "\u{1F6AB}" : "\u{1F441}\uFE0F", cls: "graphway-toggle-icon" });
-      eyeBtn.createSpan({ text: "Files", cls: "graphway-toggle-label" });
-      eyeBtn.title = isFilesHidden ? `Direct files are HIDDEN in "${node.folderName}" index note.
-Click to render files inside index note.` : `Direct files are RENDERED in "${node.folderName}" index note.
-Click to hide files from index note.`;
-      eyeBtn.onclick = async (e) => {
+      renderBtn.createSpan({ text: isFilesHidden ? "\u{1F6AB}" : "\u{1F441}\uFE0F", cls: "graphway-toggle-icon" });
+      renderBtn.createSpan({ text: isFilesHidden ? "Unrendered" : "Rendered", cls: "graphway-toggle-label" });
+      renderBtn.title = isFilesHidden ? `Direct files are UNRENDERED in "${node.folderName}" index note (GraphWay block removed if empty).
+Click to render files.` : `Direct files are RENDERED in "${node.folderName}" index note.
+Click to unrender direct files.`;
+      renderBtn.onclick = async (e) => {
         e.stopPropagation();
         if (!this.settings.foldersHidingDirectFiles) {
           this.settings.foldersHidingDirectFiles = [];
@@ -1324,7 +1407,7 @@ Click to hide files from index note.`;
           new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
         } else {
           this.settings.foldersHidingDirectFiles.push(node.folderPath);
-          new import_obsidian7.Notice(`GraphWay: Direct files hidden from "${node.folderName}" index note.`);
+          new import_obsidian7.Notice(`GraphWay: Direct files unrendered from "${node.folderName}" index note.`);
         }
         await this.onSettingsChange();
         await this.synchronizer.syncExistingIndices();
@@ -1335,11 +1418,14 @@ Click to hide files from index note.`;
       cls: `graphway-badge ${isHomepage ? "graphway-badge-homepage" : node.hasIndex ? "graphway-badge-ok" : "graphway-badge-warn"}`,
       text: isHomepage ? "\u{1F3E0} HOMEPAGE" : node.hasIndex ? "INDEXED" : "NO INDEX"
     });
-    badge.title = node.hasIndex ? `Folder Note: ${node.indexFilePath}
-Click to open` : "Click to create folder index note";
+    badge.title = node.hasIndex ? `Click to un-index (detach index note and convert to normal note)` : "Click to create folder index note";
     badge.onclick = async (e) => {
       e.stopPropagation();
-      await this.handleCreateOrOpenIndex(node);
+      if (node.hasIndex) {
+        await this.handleDetachIndex(node);
+      } else {
+        await this.handleCreateOrOpenIndex(node);
+      }
     };
     const body = card.createDiv({ cls: "graphway-node-body" });
     const renderIndexedChildFolders = () => {
@@ -1430,10 +1516,10 @@ Click to pan canvas to this folder`;
           const itemRow = body.createDiv({ cls: "graphway-item-row graphway-files-hidden-row" });
           itemRow.createSpan({ text: "\u{1F6AB}", cls: "graphway-item-icon" });
           const nameSpan = itemRow.createSpan({
-            text: `${node.directFiles.length} direct file(s) hidden from index`,
+            text: `${node.directFiles.length} direct file(s) unrendered`,
             cls: "graphway-item-name graphway-files-hidden-label"
           });
-          nameSpan.title = "Click to show direct files in index note";
+          nameSpan.title = "Click to render direct files in index note";
           nameSpan.onclick = async () => {
             this.settings.foldersHidingDirectFiles = (this.settings.foldersHidingDirectFiles || []).filter(
               (p) => p !== node.folderPath
@@ -1752,8 +1838,15 @@ Click wire to disconnect`;
       }
       return;
     }
+    const isRoot = node.folderPath === "/" || node.folderPath === "";
+    if (this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
+        (p) => p !== node.folderPath && (!isRoot || p !== "/" && p !== "")
+      );
+      await this.onSettingsChange();
+    }
     let folder = null;
-    if (node.folderPath === "/" || node.folderPath === "") {
+    if (isRoot) {
       folder = this.app.vault.getRoot();
     } else {
       const abstractFolder = this.app.vault.getAbstractFileByPath(node.folderPath);
@@ -1764,7 +1857,7 @@ Click wire to disconnect`;
     if (folder) {
       const newFile = await this.synchronizer.createFolderNoteForFolder(folder);
       if (newFile) {
-        if ((node.folderPath === "/" || node.folderPath === "") && !this.settings.homepageNotePath) {
+        if (isRoot && !this.settings.homepageNotePath) {
           this.settings.homepageNotePath = newFile.path;
           await this.onSettingsChange();
         }
@@ -1775,9 +1868,25 @@ Click wire to disconnect`;
     }
   }
   /**
+   * Un-indexes a folder note, converting it back to a normal note and updating the canvas
+   */
+  async handleDetachIndex(node) {
+    await this.synchronizer.detachFolderNote(node.folderPath, node.indexFilePath);
+    await this.onSettingsChange();
+    const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    this.updateData(hierarchy);
+    new import_obsidian7.Notice(`GraphWay: Un-indexed "${node.folderName}". Converted index to normal note.`);
+  }
+  /**
    * Assigns a specific file as the custom index note for a folder
    */
   async setFileAsFolderIndex(folderPath, filePath) {
+    const isRoot = folderPath === "/" || folderPath === "";
+    if (this.settings.unindexedFolderPaths) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
+        (p) => p !== folderPath && (!isRoot || p !== "/" && p !== "")
+      );
+    }
     if (!this.settings.customFolderNotes) {
       this.settings.customFolderNotes = {};
     }

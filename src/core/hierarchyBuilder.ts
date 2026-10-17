@@ -85,16 +85,22 @@ export class HierarchyBuilder {
     let folderNote: TFile | null = null;
     let folderDisplayName = folder.name || 'Root';
 
-    const isRoot = folder.path === '/' || folder.isRoot();
+    const isRoot = folder.path === '/' || folder.isRoot() || folder.path === '';
+    const isExplicitlyUnindexed = Boolean(
+      this.settings.unindexedFolderPaths &&
+        (this.settings.unindexedFolderPaths.includes(folder.path) ||
+          (isRoot && (this.settings.unindexedFolderPaths.includes('/') || this.settings.unindexedFolderPaths.includes(''))))
+    );
+
     if (isRoot) {
-      if (this.settings.homepageNotePath) {
+      if (!isExplicitlyUnindexed && this.settings.homepageNotePath) {
         const hp = this.app.vault.getAbstractFileByPath(this.settings.homepageNotePath);
         if (hp instanceof TFile) {
           folderNote = hp;
           folderDisplayName = hp.basename || 'Homepage';
         }
       }
-    } else {
+    } else if (!isExplicitlyUnindexed) {
       folderNote = this.resolver.findFolderNote(folder);
     }
 
