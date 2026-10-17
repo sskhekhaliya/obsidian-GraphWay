@@ -18,7 +18,7 @@ export default class GraphWayPlugin extends Plugin {
     await this.loadSettings();
 
     // Initialize core services
-    this.resolver = new FolderResolver(this.settings);
+    this.resolver = new FolderResolver(this.app.vault, this.settings);
     this.hierarchyBuilder = new HierarchyBuilder(this.app, this.resolver, this.settings);
     this.generator = new MarkdownGenerator(this.app, this.settings);
     this.synchronizer = new VaultSynchronizer(

@@ -46,6 +46,7 @@ var DEFAULT_SETTINGS = {
   customFolderEdges: [],
   folderToFileConnections: [],
   customLinkOverrides: {},
+  customFolderNotes: {},
   foldersHidingDirectFiles: [],
   nodePositions: {}
 };
@@ -53,7 +54,8 @@ var DEFAULT_SETTINGS = {
 // src/core/folderResolver.ts
 var import_obsidian = require("obsidian");
 var FolderResolver = class _FolderResolver {
-  constructor(settings) {
+  constructor(vault, settings) {
+    this.vault = vault;
     this.settings = settings;
   }
   updateSettings(settings) {
@@ -122,6 +124,13 @@ var FolderResolver = class _FolderResolver {
    * Finds the folder note for a given TFolder, if one exists.
    */
   findFolderNote(folder) {
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
+      const customPath = this.settings.customFolderNotes[folder.path];
+      const customFile = this.vault.getAbstractFileByPath(customPath);
+      if (customFile instanceof import_obsidian.TFile) {
+        return customFile;
+      }
+    }
     if (this.settings.folderNoteInsideFolder) {
       for (const child of folder.children) {
         if (child instanceof import_obsidian.TFile && this.isFolderNoteFor(child, folder)) {
@@ -630,7 +639,9 @@ var VaultSynchronizer = class {
   async createFolderNoteForFolder(folder) {
     const isRoot = folder.path === "/" || folder.isRoot();
     let targetPath = "";
-    if (isRoot) {
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
+      targetPath = this.settings.customFolderNotes[folder.path];
+    } else if (isRoot) {
       targetPath = this.settings.homepageNotePath || "Home.md";
       if (!targetPath.endsWith(".md")) targetPath += ".md";
     } else {
@@ -1251,11 +1262,31 @@ var CanvasRenderer = class {
         text: `\u{1F4C4} ${indexFileName}`
       });
       subTitle.title = `Index note: ${node.indexFilePath}
-Click to open`;
+Click to open
+Right-click for options`;
       subTitle.onclick = (e) => {
         e.stopPropagation();
         const f = this.app.vault.getAbstractFileByPath(node.indexFilePath);
         if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
+      };
+      subTitle.oncontextmenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const menu = new import_obsidian7.Menu();
+        menu.addItem((item) => {
+          item.setTitle(`Open "${indexFileName}"`).setIcon("document").onClick(() => {
+            const f = this.app.vault.getAbstractFileByPath(node.indexFilePath);
+            if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
+          });
+        });
+        if (this.settings.customFolderNotes && this.settings.customFolderNotes[node.folderPath]) {
+          menu.addItem((item) => {
+            item.setTitle("Unset Custom Index Assignment").setIcon("cross").onClick(async () => {
+              await this.unsetFolderIndex(node.folderPath);
+            });
+          });
+        }
+        menu.showAtMouseEvent(e);
       };
     } else {
       const noIndexBtn = titleGroup.createDiv({
@@ -1350,6 +1381,23 @@ Click to pan canvas to this folder`;
             const f = this.app.vault.getAbstractFileByPath(filePath);
             if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
           };
+          itemRow.oncontextmenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const menu = new import_obsidian7.Menu();
+            menu.addItem((item) => {
+              item.setTitle(`\u2B50 Make "${fileName}" the Index Note for "${tree.folderName}"`).setIcon("star").onClick(async () => {
+                await this.setFileAsFolderIndex(tree.folderPath, filePath);
+              });
+            });
+            menu.addItem((item) => {
+              item.setTitle(`Open "${fileName}"`).setIcon("document").onClick(() => {
+                const f = this.app.vault.getAbstractFileByPath(filePath);
+                if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
+              });
+            });
+            menu.showAtMouseEvent(e);
+          };
           const fileInSocket = itemRow.createDiv({ cls: "graphway-socket graphway-socket-item-in" });
           fileInSocket.title = "Input socket: Connect any folder to this file to render that folder inside this note";
           fileInSocket.setAttribute("data-socket-file-in", filePath);
@@ -1407,6 +1455,23 @@ Click to pan canvas to this folder`;
         nameSpan.onclick = () => {
           const f = this.app.vault.getAbstractFileByPath(filePath);
           if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
+        };
+        itemRow.oncontextmenu = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const menu = new import_obsidian7.Menu();
+          menu.addItem((item) => {
+            item.setTitle(`\u2B50 Make "${fileName}" the Folder Index Note`).setIcon("star").onClick(async () => {
+              await this.setFileAsFolderIndex(node.folderPath, filePath);
+            });
+          });
+          menu.addItem((item) => {
+            item.setTitle(`Open "${fileName}"`).setIcon("document").onClick(() => {
+              const f = this.app.vault.getAbstractFileByPath(filePath);
+              if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
+            });
+          });
+          menu.showAtMouseEvent(e);
         };
         const fileInSocket = itemRow.createDiv({ cls: "graphway-socket graphway-socket-item-in" });
         fileInSocket.title = "Input socket: Connect any folder to this file to render that folder inside this note";
@@ -1709,6 +1774,46 @@ Click wire to disconnect`;
       }
     }
   }
+  /**
+   * Assigns a specific file as the custom index note for a folder
+   */
+  async setFileAsFolderIndex(folderPath, filePath) {
+    if (!this.settings.customFolderNotes) {
+      this.settings.customFolderNotes = {};
+    }
+    this.settings.customFolderNotes[folderPath] = filePath;
+    await this.onSettingsChange();
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    let folderName = folderPath.split("/").pop() || folderPath;
+    let folder = null;
+    if (folderPath === "/" || folderPath === "") {
+      folder = this.app.vault.getRoot();
+    } else {
+      const f = this.app.vault.getAbstractFileByPath(folderPath);
+      if (f instanceof import_obsidian7.TFolder) folder = f;
+    }
+    if (file instanceof import_obsidian7.TFile && folder) {
+      folderName = folder.name || folderName;
+      await this.synchronizer.updateFolder(folder, false);
+      await this.synchronizer.syncExistingIndices();
+      new import_obsidian7.Notice(`GraphWay: Set "${file.name}" as index note for "${folderName}".`);
+      const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+      this.updateData(hierarchy);
+    }
+  }
+  /**
+   * Unsets any custom index note assigned to this folder
+   */
+  async unsetFolderIndex(folderPath) {
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath]) {
+      delete this.settings.customFolderNotes[folderPath];
+      await this.onSettingsChange();
+      await this.synchronizer.syncExistingIndices();
+      new import_obsidian7.Notice("GraphWay: Unset custom index note assignment.");
+      const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+      this.updateData(hierarchy);
+    }
+  }
 };
 
 // src/canvas-ui/GraphWayView.ts
@@ -1768,7 +1873,7 @@ var GraphWayPlugin = class extends import_obsidian9.Plugin {
   }
   async onload() {
     await this.loadSettings();
-    this.resolver = new FolderResolver(this.settings);
+    this.resolver = new FolderResolver(this.app.vault, this.settings);
     this.hierarchyBuilder = new HierarchyBuilder(this.app, this.resolver, this.settings);
     this.generator = new MarkdownGenerator(this.app, this.settings);
     this.synchronizer = new VaultSynchronizer(

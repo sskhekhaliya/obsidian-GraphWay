@@ -32,6 +32,8 @@ export interface GraphWaySettings {
   folderToFileConnections: { folderPath: string; filePath: string }[];
   // Custom manual links: maps a filePath to a specific target folder path
   customLinkOverrides: Record<string, string>;
+  // Explicit custom folder index note mappings: folderPath -> filePath
+  customFolderNotes: Record<string, string>;
   // Folders whose index notes hide direct files (e.g. only render subfolders)
   foldersHidingDirectFiles: string[];
   // Saved canvas node positions: key is folderPath
@@ -58,6 +60,7 @@ export const DEFAULT_SETTINGS: GraphWaySettings = {
   customFolderEdges: [],
   folderToFileConnections: [],
   customLinkOverrides: {},
+  customFolderNotes: {},
   foldersHidingDirectFiles: [],
   nodePositions: {}
 };

@@ -166,7 +166,9 @@ export class VaultSynchronizer {
     const isRoot = folder.path === '/' || folder.isRoot();
     let targetPath = '';
 
-    if (isRoot) {
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
+      targetPath = this.settings.customFolderNotes[folder.path];
+    } else if (isRoot) {
       targetPath = this.settings.homepageNotePath || 'Home.md';
       if (!targetPath.endsWith('.md')) targetPath += '.md';
     } else {

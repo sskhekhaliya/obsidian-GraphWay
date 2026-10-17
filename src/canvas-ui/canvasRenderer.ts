@@ -1,4 +1,4 @@
-import { App, TFolder, TFile, Notice } from 'obsidian';
+import { App, TFolder, TFile, Notice, Menu } from 'obsidian';
 import { GraphWaySettings, FolderHierarchyNode, UnindexedFolderTree } from '../types';
 import { VaultSynchronizer } from '../core/vaultSynchronizer';
 
@@ -527,11 +527,36 @@ export class CanvasRenderer {
         cls: 'graphway-node-index-subtitle',
         text: `📄 ${indexFileName}`
       });
-      subTitle.title = `Index note: ${node.indexFilePath}\nClick to open`;
+      subTitle.title = `Index note: ${node.indexFilePath}\nClick to open\nRight-click for options`;
       subTitle.onclick = (e) => {
         e.stopPropagation();
         const f = this.app.vault.getAbstractFileByPath(node.indexFilePath!);
         if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
+      };
+      subTitle.oncontextmenu = (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const menu = new Menu();
+        menu.addItem((item) => {
+          item
+            .setTitle(`Open "${indexFileName}"`)
+            .setIcon('document')
+            .onClick(() => {
+              const f = this.app.vault.getAbstractFileByPath(node.indexFilePath!);
+              if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
+            });
+        });
+        if (this.settings.customFolderNotes && this.settings.customFolderNotes[node.folderPath]) {
+          menu.addItem((item) => {
+            item
+              .setTitle('Unset Custom Index Assignment')
+              .setIcon('cross')
+              .onClick(async () => {
+                await this.unsetFolderIndex(node.folderPath);
+              });
+          });
+        }
+        menu.showAtMouseEvent(e);
       };
     } else {
       const noIndexBtn = titleGroup.createDiv({
@@ -650,6 +675,30 @@ export class CanvasRenderer {
             if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
           };
 
+          itemRow.oncontextmenu = (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const menu = new Menu();
+            menu.addItem((item) => {
+              item
+                .setTitle(`⭐ Make "${fileName}" the Index Note for "${tree.folderName}"`)
+                .setIcon('star')
+                .onClick(async () => {
+                  await this.setFileAsFolderIndex(tree.folderPath, filePath);
+                });
+            });
+            menu.addItem((item) => {
+              item
+                .setTitle(`Open "${fileName}"`)
+                .setIcon('document')
+                .onClick(() => {
+                  const f = this.app.vault.getAbstractFileByPath(filePath);
+                  if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
+                });
+            });
+            menu.showAtMouseEvent(e);
+          };
+
           // File input socket to connect a folder into this file
           const fileInSocket = itemRow.createDiv({ cls: 'graphway-socket graphway-socket-item-in' });
           fileInSocket.title = 'Input socket: Connect any folder to this file to render that folder inside this note';
@@ -716,6 +765,30 @@ export class CanvasRenderer {
         nameSpan.onclick = () => {
           const f = this.app.vault.getAbstractFileByPath(filePath);
           if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
+        };
+
+        itemRow.oncontextmenu = (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const menu = new Menu();
+          menu.addItem((item) => {
+            item
+              .setTitle(`⭐ Make "${fileName}" the Folder Index Note`)
+              .setIcon('star')
+              .onClick(async () => {
+                await this.setFileAsFolderIndex(node.folderPath, filePath);
+              });
+          });
+          menu.addItem((item) => {
+            item
+              .setTitle(`Open "${fileName}"`)
+              .setIcon('document')
+              .onClick(() => {
+                const f = this.app.vault.getAbstractFileByPath(filePath);
+                if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
+              });
+          });
+          menu.showAtMouseEvent(e);
         };
 
         // File input socket to connect a folder into this file
@@ -1093,5 +1166,51 @@ export class CanvasRenderer {
       }
     }
   }
+
+  /**
+   * Assigns a specific file as the custom index note for a folder
+   */
+  private async setFileAsFolderIndex(folderPath: string, filePath: string): Promise<void> {
+    if (!this.settings.customFolderNotes) {
+      this.settings.customFolderNotes = {};
+    }
+    this.settings.customFolderNotes[folderPath] = filePath;
+    await this.onSettingsChange();
+
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    let folderName = folderPath.split('/').pop() || folderPath;
+
+    let folder: TFolder | null = null;
+    if (folderPath === '/' || folderPath === '') {
+      folder = this.app.vault.getRoot();
+    } else {
+      const f = this.app.vault.getAbstractFileByPath(folderPath);
+      if (f instanceof TFolder) folder = f;
+    }
+
+    if (file instanceof TFile && folder) {
+      folderName = folder.name || folderName;
+      await this.synchronizer.updateFolder(folder, false);
+      await this.synchronizer.syncExistingIndices();
+      new Notice(`GraphWay: Set "${file.name}" as index note for "${folderName}".`);
+      const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+      this.updateData(hierarchy);
+    }
+  }
+
+  /**
+   * Unsets any custom index note assigned to this folder
+   */
+  private async unsetFolderIndex(folderPath: string): Promise<void> {
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath]) {
+      delete this.settings.customFolderNotes[folderPath];
+      await this.onSettingsChange();
+      await this.synchronizer.syncExistingIndices();
+      new Notice('GraphWay: Unset custom index note assignment.');
+      const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+      this.updateData(hierarchy);
+    }
+  }
 }
+
 

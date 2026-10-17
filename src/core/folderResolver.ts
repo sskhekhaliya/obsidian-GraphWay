@@ -1,10 +1,12 @@
-import { TFolder, TFile } from 'obsidian';
+import { TFolder, TFile, Vault } from 'obsidian';
 import { GraphWaySettings } from '../types';
 
 export class FolderResolver {
+  private vault: Vault;
   private settings: GraphWaySettings;
 
-  constructor(settings: GraphWaySettings) {
+  constructor(vault: Vault, settings: GraphWaySettings) {
+    this.vault = vault;
     this.settings = settings;
   }
 
@@ -103,7 +105,16 @@ export class FolderResolver {
    * Finds the folder note for a given TFolder, if one exists.
    */
   public findFolderNote(folder: TFolder): TFile | null {
-    // If inside folder, check children of folder
+    // 1. Check custom explicitly assigned folder index note
+    if (this.settings.customFolderNotes && this.settings.customFolderNotes[folder.path]) {
+      const customPath = this.settings.customFolderNotes[folder.path];
+      const customFile = this.vault.getAbstractFileByPath(customPath);
+      if (customFile instanceof TFile) {
+        return customFile;
+      }
+    }
+
+    // 2. If inside folder, check children of folder
     if (this.settings.folderNoteInsideFolder) {
       for (const child of folder.children) {
         if (child instanceof TFile && this.isFolderNoteFor(child, folder)) {
