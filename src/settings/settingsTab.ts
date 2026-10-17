@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type GraphWayPlugin from '../main';
-import { FolderNoteNamingStrategy, SortOrder } from '../types';
+import { FolderNoteNamingStrategy, SortOrder, RenderViewLayout } from '../types';
 import { FileSuggest } from '../ui/fileSuggest';
 
 export class GraphWaySettingsTab extends PluginSettingTab {
@@ -139,6 +139,27 @@ export class GraphWaySettingsTab extends PluginSettingTab {
           .onChange(async (val: string) => {
             this.plugin.settings.sortOrder = val as SortOrder;
             await this.plugin.saveSettings();
+          });
+      });
+
+    // View Layout
+    new Setting(containerEl)
+      .setName('Folder Note View Layout')
+      .setDesc('Select the layout style for folder notes (MOCs), inspired by system folder views.')
+      .addDropdown(drop => {
+        drop
+          .addOption('list', 'Classic List (bullet list with icons)')
+          .addOption('details', 'Details (markdown table with Name, Type, Modified, Size)')
+          .addOption('inline', 'Inline Pills (horizontal • separated, no bullets)')
+          .addOption('chips', 'Neon Pills (styled capsule list, no tags)')
+          .addOption('cards', 'Modern Cards (card grid layout)')
+          .addOption('content', 'Glassmorphism Rows (translucent rows with left accent border)')
+          .setValue(this.plugin.settings.renderViewLayout || 'list')
+          .onChange(async (val: string) => {
+            this.plugin.settings.renderViewLayout = val as RenderViewLayout;
+            await this.plugin.saveSettings();
+            await this.plugin.synchronizer.syncExistingIndices();
+            new Notice(`GraphWay: View layout updated to "${val}". Folder notes refreshed.`);
           });
       });
 

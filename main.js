@@ -27,6 +27,7 @@ var import_obsidian9 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
+  renderViewLayout: "list",
   folderNoteStrategy: "same-name",
   customRegex: "^(?:\\d+[\\s\\-_]+)?(?<name>.+?)(?:---)?$",
   suffixString: "---",
@@ -408,20 +409,63 @@ var MarkdownGenerator = class {
     }
     return lines;
   }
+  formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  formatDate(mtime) {
+    if (!mtime) return "\u2014";
+    const d = new Date(mtime);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  collectUnindexedItems(tree, originFolderPath) {
+    const items = [];
+    for (const filePath of tree.files) {
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (file instanceof import_obsidian3.TFile) {
+        items.push({
+          kind: "file",
+          name: file.basename,
+          link: this.app.fileManager.generateMarkdownLink(file, originFolderPath),
+          targetPath: file.path,
+          type: "Note",
+          modified: this.formatDate(file.stat.mtime),
+          size: this.formatFileSize(file.stat.size),
+          folderContext: tree.folderName
+        });
+      }
+    }
+    for (const sub of tree.childTrees) {
+      items.push(...this.collectUnindexedItems(sub, originFolderPath));
+    }
+    return items;
+  }
   /**
    * Generates the inner markdown content for a folder's GraphWay block
    */
   generateBlockContent(node) {
-    const lines = [];
-    const folderLinks = [];
+    const folderItems = [];
     for (const child of node.indexedChildFolders) {
       const childFile = this.app.vault.getAbstractFileByPath(child.indexFilePath);
       if (childFile instanceof import_obsidian3.TFile) {
         const link = this.app.fileManager.generateMarkdownLink(childFile, node.folderPath, "", child.folderName);
-        folderLinks.push({ name: child.folderName, link });
+        folderItems.push({
+          kind: "folder",
+          name: child.folderName,
+          link,
+          targetPath: childFile.path,
+          type: "Folder",
+          modified: this.formatDate(childFile.stat.mtime),
+          size: "\u2014"
+        });
       }
     }
-    const fileLinks = [];
+    const fileItems = [];
     const isFilesHidden = this.settings.foldersHidingDirectFiles && this.settings.foldersHidingDirectFiles.includes(node.folderPath);
     if (!isFilesHidden) {
       for (const filePath of node.directFiles) {
@@ -432,7 +476,15 @@ var MarkdownGenerator = class {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof import_obsidian3.TFile) {
           const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
-          fileLinks.push({ name: file.basename, link });
+          fileItems.push({
+            kind: "file",
+            name: file.basename,
+            link,
+            targetPath: file.path,
+            type: file.extension.toUpperCase() === "MD" ? "Note" : file.extension.toUpperCase(),
+            modified: this.formatDate(file.stat.mtime),
+            size: this.formatFileSize(file.stat.size)
+          });
         }
       }
       for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
@@ -440,40 +492,132 @@ var MarkdownGenerator = class {
           const file = this.app.vault.getAbstractFileByPath(filePath);
           if (file instanceof import_obsidian3.TFile) {
             const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
-            fileLinks.push({ name: file.basename, link });
+            fileItems.push({
+              kind: "file",
+              name: file.basename,
+              link,
+              targetPath: file.path,
+              type: file.extension.toUpperCase() === "MD" ? "Note" : file.extension.toUpperCase(),
+              modified: this.formatDate(file.stat.mtime),
+              size: this.formatFileSize(file.stat.size)
+            });
           }
         }
       }
     }
+    const unindexedItems = [];
+    if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
+      for (const tree of node.unindexedTrees) {
+        unindexedItems.push(...this.collectUnindexedItems(tree, node.folderPath));
+      }
+    }
+    if (folderItems.length === 0 && fileItems.length === 0 && unindexedItems.length === 0) {
+      return "";
+    }
+    folderItems.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
+    fileItems.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
+    unindexedItems.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
+    let sortedAllItems = [];
+    if (this.settings.sortOrder === "folders-first") {
+      sortedAllItems = [...folderItems, ...fileItems, ...unindexedItems];
+    } else if (this.settings.sortOrder === "files-first") {
+      sortedAllItems = [...fileItems, ...unindexedItems, ...folderItems];
+    } else {
+      sortedAllItems = [...folderItems, ...fileItems, ...unindexedItems];
+      sortedAllItems.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
+    }
+    const layout = this.settings.renderViewLayout || "list";
+    if (layout === "details") {
+      return this.renderDetailsLayout(sortedAllItems);
+    } else if (layout === "inline") {
+      return this.renderInlineLayout(sortedAllItems);
+    } else if (layout === "cards" || layout === "tiles") {
+      return this.renderCardsLayout(sortedAllItems);
+    } else if (layout === "chips") {
+      return this.renderChipsLayout(sortedAllItems);
+    } else if (layout === "content") {
+      return this.renderContentLayout(sortedAllItems);
+    } else {
+      return this.renderListLayout(node, folderItems, fileItems);
+    }
+  }
+  renderInlineLayout(items) {
+    return items.map((item) => {
+      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      return `${icon} ${item.link}`;
+    }).join("  \u2022  ");
+  }
+  renderListLayout(node, folderItems, fileItems) {
+    const lines = [];
     const unindexedLines = [];
     if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
       for (const tree of node.unindexedTrees) {
         unindexedLines.push(...this.renderUnindexedTree(tree, 0, node.folderPath));
       }
     }
-    folderLinks.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
-    fileLinks.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
     if (this.settings.sortOrder === "folders-first") {
-      for (const f of folderLinks) lines.push(`- \u{1F4C1} ${f.link}`);
+      for (const f of folderItems) lines.push(`- \u{1F4C1} ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
-      for (const f of fileLinks) lines.push(`- \u{1F4C4} ${f.link}`);
+      for (const f of fileItems) lines.push(`- \u{1F4C4} ${f.link}`);
     } else if (this.settings.sortOrder === "files-first") {
-      for (const f of fileLinks) lines.push(`- \u{1F4C4} ${f.link}`);
-      for (const f of folderLinks) lines.push(`- \u{1F4C1} ${f.link}`);
+      for (const f of fileItems) lines.push(`- \u{1F4C4} ${f.link}`);
+      for (const f of folderItems) lines.push(`- \u{1F4C1} ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
     } else {
       const combined = [
-        ...folderLinks.map((f) => ({ name: f.name, line: `- \u{1F4C1} ${f.link}` })),
-        ...fileLinks.map((f) => ({ name: f.name, line: `- \u{1F4C4} ${f.link}` }))
+        ...folderItems.map((f) => ({ name: f.name, line: `- \u{1F4C1} ${f.link}` })),
+        ...fileItems.map((f) => ({ name: f.name, line: `- \u{1F4C4} ${f.link}` }))
       ];
       combined.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
       for (const item of combined) lines.push(item.line);
       for (const u of unindexedLines) lines.push(u);
     }
-    if (lines.length === 0) {
-      return "";
+    return lines.join("\n");
+  }
+  renderDetailsLayout(items) {
+    const lines = [];
+    lines.push("| Name | Type | Modified | Size |");
+    lines.push("| :--- | :--- | :--- | :--- |");
+    for (const item of items) {
+      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      const typeLabel = item.folderContext ? `${item.type} (${item.folderContext})` : item.type;
+      const safeLink = item.link.replace(/\|/g, "\\|");
+      lines.push(`| ${icon} ${safeLink} | ${typeLabel} | ${item.modified} | ${item.size} |`);
     }
     return lines.join("\n");
+  }
+  renderCardsLayout(items) {
+    const hiddenGraphLinks = items.map((i) => i.link).join(" ");
+    const cardsHtml = items.map((item) => {
+      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      return `<a class="graphway-card graphway-card-item" data-href="${item.targetPath}"><span class="graphway-card-icon">${icon}</span><span class="graphway-card-name">${item.name}</span></a>`;
+    }).join("\n  ");
+    return `%% ${hiddenGraphLinks} %%
+<div class="graphway-cards">
+  ${cardsHtml}
+</div>`;
+  }
+  renderChipsLayout(items) {
+    const hiddenGraphLinks = items.map((i) => i.link).join(" ");
+    const pillsHtml = items.map((item) => {
+      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      return `<a class="graphway-card graphway-pill-item" data-href="${item.targetPath}">${icon} ${item.name}</a>`;
+    }).join("\n  ");
+    return `%% ${hiddenGraphLinks} %%
+<div class="graphway-pills">
+  ${pillsHtml}
+</div>`;
+  }
+  renderContentLayout(items) {
+    const hiddenGraphLinks = items.map((i) => i.link).join(" ");
+    const rowsHtml = items.map((item) => {
+      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      return `<a class="graphway-card graphway-row-item" data-href="${item.targetPath}"><span class="graphway-row-left">${icon} ${item.name}</span><span class="graphway-row-right">${item.modified}</span></a>`;
+    }).join("\n  ");
+    return `%% ${hiddenGraphLinks} %%
+<div class="graphway-rows">
+  ${rowsHtml}
+</div>`;
   }
   /**
    * Cleanly removes the GraphWay block from a file if present.
@@ -522,7 +666,9 @@ ${trimmedAfter}`;
     const beginMarker = this.settings.beginMarker;
     const endMarker = this.settings.endMarker;
     const fullBlock = `${beginMarker}
+
 ${newBlockContent}
+
 ${endMarker}`;
     const startIndex = currentContent.indexOf(beginMarker);
     const endIndex = currentContent.indexOf(endMarker);
@@ -919,6 +1065,14 @@ var GraphWaySettingsTab = class extends import_obsidian6.PluginSettingTab {
       drop.addOption("folders-first", "Subfolders first, then files").addOption("files-first", "Files first, then subfolders").addOption("alphabetical", "Alphabetical (combined)").setValue(this.plugin.settings.sortOrder).onChange(async (val) => {
         this.plugin.settings.sortOrder = val;
         await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian6.Setting(containerEl).setName("Folder Note View Layout").setDesc("Select the layout style for folder notes (MOCs), inspired by system folder views.").addDropdown((drop) => {
+      drop.addOption("list", "Classic List (bullet list with icons)").addOption("details", "Details (markdown table with Name, Type, Modified, Size)").addOption("inline", "Inline Pills (horizontal \u2022 separated, no bullets)").addOption("chips", "Neon Pills (styled capsule list, no tags)").addOption("cards", "Modern Cards (card grid layout)").addOption("content", "Glassmorphism Rows (translucent rows with left accent border)").setValue(this.plugin.settings.renderViewLayout || "list").onChange(async (val) => {
+        this.plugin.settings.renderViewLayout = val;
+        await this.plugin.saveSettings();
+        await this.plugin.synchronizer.syncExistingIndices();
+        new import_obsidian6.Notice(`GraphWay: View layout updated to "${val}". Folder notes refreshed.`);
       });
     });
     containerEl.createEl("h3", { text: "\u26A1 Exclusions & Triggers" });
@@ -2072,6 +2226,34 @@ var GraphWayPlugin = class extends import_obsidian9.Plugin {
           }
         }
         return false;
+      }
+    });
+    this.registerDomEvent(document, "click", (evt) => {
+      const target = evt.target;
+      const card = target.closest(".graphway-card");
+      if (card) {
+        const href = card.getAttribute("data-href");
+        if (href) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          this.app.workspace.openLinkText(href, "", evt.ctrlKey || evt.metaKey);
+        }
+      }
+    });
+    this.registerDomEvent(document, "mouseover", (evt) => {
+      const target = evt.target;
+      const card = target.closest(".graphway-card");
+      if (card && (evt.ctrlKey || evt.metaKey)) {
+        const href = card.getAttribute("data-href");
+        if (href) {
+          this.app.workspace.trigger("hover-link", {
+            event: evt,
+            source: "graphway",
+            hoverParent: card,
+            targetEl: card,
+            linktext: href
+          });
+        }
       }
     });
     this.addSettingTab(new GraphWaySettingsTab(this.app, this));

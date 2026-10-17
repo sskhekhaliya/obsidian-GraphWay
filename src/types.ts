@@ -7,7 +7,10 @@ export type FolderNoteNamingStrategy =
 
 export type SortOrder = 'alphabetical' | 'folders-first' | 'files-first';
 
+export type RenderViewLayout = 'list' | 'details' | 'inline' | 'cards' | 'chips' | 'content';
+
 export interface GraphWaySettings {
+  renderViewLayout: RenderViewLayout;
   folderNoteStrategy: FolderNoteNamingStrategy;
   customRegex: string; // e.g. "^(?:\d+[\s\-_]+)?(?<name>.+?)(?:---)?$"
   suffixString: string; // e.g. "---"
@@ -43,6 +46,7 @@ export interface GraphWaySettings {
 }
 
 export const DEFAULT_SETTINGS: GraphWaySettings = {
+  renderViewLayout: 'list',
   folderNoteStrategy: 'same-name',
   customRegex: '^(?:\\d+[\\s\\-_]+)?(?<name>.+?)(?:---)?$',
   suffixString: '---',

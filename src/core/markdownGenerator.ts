@@ -1,6 +1,17 @@
 import { App, TFile } from 'obsidian';
 import { GraphWaySettings, FolderHierarchyNode, UnindexedFolderTree } from '../types';
 
+export interface GraphWayItem {
+  kind: 'folder' | 'file';
+  name: string;
+  link: string;
+  targetPath: string;
+  type: string;
+  modified: string;
+  size: string;
+  folderContext?: string;
+}
+
 export class MarkdownGenerator {
   private app: App;
   private settings: GraphWaySettings;
@@ -46,31 +57,83 @@ export class MarkdownGenerator {
     return lines;
   }
 
+  private formatFileSize(bytes: number): string {
+    if (!bytes || bytes <= 0) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  private formatDate(mtime: number): string {
+    if (!mtime) return '—';
+    const d = new Date(mtime);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private collectUnindexedItems(
+    tree: UnindexedFolderTree,
+    originFolderPath: string
+  ): GraphWayItem[] {
+    const items: GraphWayItem[] = [];
+
+    for (const filePath of tree.files) {
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (file instanceof TFile) {
+        items.push({
+          kind: 'file',
+          name: file.basename,
+          link: this.app.fileManager.generateMarkdownLink(file, originFolderPath),
+          targetPath: file.path,
+          type: 'Note',
+          modified: this.formatDate(file.stat.mtime),
+          size: this.formatFileSize(file.stat.size),
+          folderContext: tree.folderName
+        });
+      }
+    }
+
+    for (const sub of tree.childTrees) {
+      items.push(...this.collectUnindexedItems(sub, originFolderPath));
+    }
+
+    return items;
+  }
+
   /**
    * Generates the inner markdown content for a folder's GraphWay block
    */
   public generateBlockContent(node: FolderHierarchyNode): string {
-    const lines: string[] = [];
+    // 1. Gather all connected indexed child folder items
+    const folderItems: GraphWayItem[] = [];
 
-    // 1. Gather all connected indexed child folder links
-    const folderLinks: { name: string; link: string }[] = [];
     for (const child of node.indexedChildFolders) {
       const childFile = this.app.vault.getAbstractFileByPath(child.indexFilePath);
       if (childFile instanceof TFile) {
         const link = this.app.fileManager.generateMarkdownLink(childFile, node.folderPath, '', child.folderName);
-        folderLinks.push({ name: child.folderName, link });
+        folderItems.push({
+          kind: 'folder',
+          name: child.folderName,
+          link,
+          targetPath: childFile.path,
+          type: 'Folder',
+          modified: this.formatDate(childFile.stat.mtime),
+          size: '—'
+        });
       }
     }
 
-    // 2. Gather direct file links (unless direct files are hidden for this folder's index note)
-    const fileLinks: { name: string; link: string }[] = [];
+    // 2. Gather direct file items (unless direct files are hidden for this folder's index note)
+    const fileItems: GraphWayItem[] = [];
+
     const isFilesHidden =
       this.settings.foldersHidingDirectFiles &&
       this.settings.foldersHidingDirectFiles.includes(node.folderPath);
 
     if (!isFilesHidden) {
       for (const filePath of node.directFiles) {
-        // Check if this file has a custom override pointing to another folder
         const overrideTarget = this.settings.customLinkOverrides[filePath];
         if (overrideTarget && overrideTarget !== node.folderPath) {
           continue; // routed elsewhere
@@ -79,59 +142,176 @@ export class MarkdownGenerator {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
           const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
-          fileLinks.push({ name: file.basename, link });
+          fileItems.push({
+            kind: 'file',
+            name: file.basename,
+            link,
+            targetPath: file.path,
+            type: file.extension.toUpperCase() === 'MD' ? 'Note' : file.extension.toUpperCase(),
+            modified: this.formatDate(file.stat.mtime),
+            size: this.formatFileSize(file.stat.size)
+          });
         }
       }
 
-      // Check if any external files have a custom override pointing to THIS folder
+      // External files with custom override to this folder
       for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
         if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
           const file = this.app.vault.getAbstractFileByPath(filePath);
           if (file instanceof TFile) {
             const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
-            fileLinks.push({ name: file.basename, link });
+            fileItems.push({
+              kind: 'file',
+              name: file.basename,
+              link,
+              targetPath: file.path,
+              type: file.extension.toUpperCase() === 'MD' ? 'Note' : file.extension.toUpperCase(),
+              modified: this.formatDate(file.stat.mtime),
+              size: this.formatFileSize(file.stat.size)
+            });
           }
         }
       }
     }
 
-    // 3. Render connected unindexed subfolders hierarchically
+    // 3. Unindexed subfolder items
+    const unindexedItems: GraphWayItem[] = [];
+
+    if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
+      for (const tree of node.unindexedTrees) {
+        unindexedItems.push(...this.collectUnindexedItems(tree, node.folderPath));
+      }
+    }
+
+    if (folderItems.length === 0 && fileItems.length === 0 && unindexedItems.length === 0) {
+      return '';
+    }
+
+    // Sort items
+    folderItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    fileItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    unindexedItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    let sortedAllItems: GraphWayItem[] = [];
+    if (this.settings.sortOrder === 'folders-first') {
+      sortedAllItems = [...folderItems, ...fileItems, ...unindexedItems];
+    } else if (this.settings.sortOrder === 'files-first') {
+      sortedAllItems = [...fileItems, ...unindexedItems, ...folderItems];
+    } else {
+      sortedAllItems = [...folderItems, ...fileItems, ...unindexedItems];
+      sortedAllItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }
+
+    const layout = this.settings.renderViewLayout || 'list';
+
+    if (layout === 'details') {
+      return this.renderDetailsLayout(sortedAllItems);
+    } else if (layout === 'inline') {
+      return this.renderInlineLayout(sortedAllItems);
+    } else if (layout === 'cards' || (layout as string) === 'tiles') {
+      return this.renderCardsLayout(sortedAllItems);
+    } else if (layout === 'chips') {
+      return this.renderChipsLayout(sortedAllItems);
+    } else if (layout === 'content') {
+      return this.renderContentLayout(sortedAllItems);
+    } else {
+      // Default: 'list'
+      return this.renderListLayout(node, folderItems, fileItems);
+    }
+  }
+
+  private renderInlineLayout(items: GraphWayItem[]): string {
+    return items
+      .map(item => {
+        const icon = item.kind === 'folder' ? '📁' : '📄';
+        return `${icon} ${item.link}`;
+      })
+      .join('  •  ');
+  }
+
+  private renderListLayout(
+    node: FolderHierarchyNode,
+    folderItems: { name: string; link: string }[],
+    fileItems: { name: string; link: string }[]
+  ): string {
+    const lines: string[] = [];
     const unindexedLines: string[] = [];
+
     if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
       for (const tree of node.unindexedTrees) {
         unindexedLines.push(...this.renderUnindexedTree(tree, 0, node.folderPath));
       }
     }
 
-    // Sort direct folders and direct files
-    folderLinks.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    fileLinks.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-    // Assemble the list according to sortOrder
     if (this.settings.sortOrder === 'folders-first') {
-      for (const f of folderLinks) lines.push(`- 📁 ${f.link}`);
+      for (const f of folderItems) lines.push(`- 📁 ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
-      for (const f of fileLinks) lines.push(`- 📄 ${f.link}`);
+      for (const f of fileItems) lines.push(`- 📄 ${f.link}`);
     } else if (this.settings.sortOrder === 'files-first') {
-      for (const f of fileLinks) lines.push(`- 📄 ${f.link}`);
-      for (const f of folderLinks) lines.push(`- 📁 ${f.link}`);
+      for (const f of fileItems) lines.push(`- 📄 ${f.link}`);
+      for (const f of folderItems) lines.push(`- 📁 ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
     } else {
-      // Alphabetical combined
       const combined: { name: string; line: string }[] = [
-        ...folderLinks.map(f => ({ name: f.name, line: `- 📁 ${f.link}` })),
-        ...fileLinks.map(f => ({ name: f.name, line: `- 📄 ${f.link}` }))
+        ...folderItems.map(f => ({ name: f.name, line: `- 📁 ${f.link}` })),
+        ...fileItems.map(f => ({ name: f.name, line: `- 📄 ${f.link}` }))
       ];
       combined.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
       for (const item of combined) lines.push(item.line);
       for (const u of unindexedLines) lines.push(u);
     }
 
-    if (lines.length === 0) {
-      return '';
-    }
-
     return lines.join('\n');
+  }
+
+  private renderDetailsLayout(items: GraphWayItem[]): string {
+    const lines: string[] = [];
+    lines.push('| Name | Type | Modified | Size |');
+    lines.push('| :--- | :--- | :--- | :--- |');
+    for (const item of items) {
+      const icon = item.kind === 'folder' ? '📁' : '📄';
+      const typeLabel = item.folderContext ? `${item.type} (${item.folderContext})` : item.type;
+      // In Markdown tables, unescaped '|' inside wikilinks splits the table cells.
+      const safeLink = item.link.replace(/\|/g, '\\|');
+      lines.push(`| ${icon} ${safeLink} | ${typeLabel} | ${item.modified} | ${item.size} |`);
+    }
+    return lines.join('\n');
+  }
+
+  private renderCardsLayout(items: GraphWayItem[]): string {
+    const hiddenGraphLinks = items.map(i => i.link).join(' ');
+    const cardsHtml = items.map(item => {
+      const icon = item.kind === 'folder' ? '📁' : '📄';
+      return `<a class="graphway-card graphway-card-item" data-href="${item.targetPath}">` +
+        `<span class="graphway-card-icon">${icon}</span>` +
+        `<span class="graphway-card-name">${item.name}</span>` +
+        `</a>`;
+    }).join('\n  ');
+
+    return `%% ${hiddenGraphLinks} %%\n<div class="graphway-cards">\n  ${cardsHtml}\n</div>`;
+  }
+
+  private renderChipsLayout(items: GraphWayItem[]): string {
+    const hiddenGraphLinks = items.map(i => i.link).join(' ');
+    const pillsHtml = items.map(item => {
+      const icon = item.kind === 'folder' ? '📁' : '📄';
+      return `<a class="graphway-card graphway-pill-item" data-href="${item.targetPath}">${icon} ${item.name}</a>`;
+    }).join('\n  ');
+
+    return `%% ${hiddenGraphLinks} %%\n<div class="graphway-pills">\n  ${pillsHtml}\n</div>`;
+  }
+
+  private renderContentLayout(items: GraphWayItem[]): string {
+    const hiddenGraphLinks = items.map(i => i.link).join(' ');
+    const rowsHtml = items.map(item => {
+      const icon = item.kind === 'folder' ? '📁' : '📄';
+      return `<a class="graphway-card graphway-row-item" data-href="${item.targetPath}">` +
+        `<span class="graphway-row-left">${icon} ${item.name}</span>` +
+        `<span class="graphway-row-right">${item.modified}</span>` +
+        `</a>`;
+    }).join('\n  ');
+
+    return `%% ${hiddenGraphLinks} %%\n<div class="graphway-rows">\n  ${rowsHtml}\n</div>`;
   }
 
   /**
@@ -187,7 +367,8 @@ export class MarkdownGenerator {
     const currentContent = await this.app.vault.read(file);
     const beginMarker = this.settings.beginMarker;
     const endMarker = this.settings.endMarker;
-    const fullBlock = `${beginMarker}\n${newBlockContent}\n${endMarker}`;
+    // Empty lines before and after newBlockContent ensure markdown tables and blocks are parsed properly by Obsidian
+    const fullBlock = `${beginMarker}\n\n${newBlockContent}\n\n${endMarker}`;
 
     const startIndex = currentContent.indexOf(beginMarker);
     const endIndex = currentContent.indexOf(endMarker);

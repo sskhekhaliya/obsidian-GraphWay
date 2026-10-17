@@ -31,6 +31,23 @@ While plugins like **Waypoint** introduced MOC (Map of Content) lists inside fol
    - Custom Regex patterns with `{{folder}}` interpolation.
 5. **🔄 Real-Time Vault Synchronizer**: Debounced background listener that seamlessly updates wikilinks when notes or folders are created, renamed, or moved.
 6. **🛡️ Non-Destructive**: Replaces only the designated `%% Begin GraphWay %% ... %% End GraphWay %%` block, preserving all custom text, YAML frontmatter, and manual notes.
+7. **🎨 Versatile View Layouts (MOC Presets)**: Choose how folder indexes render inside your notes—from traditional hierarchal lists to interactive neon pills, modern cards, and detailed tables.
+
+---
+
+## 🎨 Folder Note (MOC) View Layouts
+
+GraphWay lets you customize the visual presentation of folder notes and MOCs directly in the settings:
+
+- **Classic Bullet List (`list`)**: The standard clean hierarchical markdown list with folder (`📁`) and note (`📄`) icons.
+- **Neon Pills (`chips`)**: Interactive badge pills with vibrant neon hover glow, perfect for minimalist modern vaults.
+- **Modern Cards (`cards`)**: Sleek multi-column card grid giving a dashboard/portal feel to your folder notes.
+- **Details Table (`details`)**: GFM markdown table displaying Note Name, Type, Date Modified, and File Size.
+- **Glassmorphism Rows (`content`)**: Horizontal rows with left cyan accent borders and modification timestamps.
+- **Inline Separated (`inline`)**: Compact horizontal flow of links separated by bullet dots (`•`).
+
+> [!TIP]
+> **100% Graph View & Native Navigation Intact**: All visual badge layouts (Pills, Cards, Rows) feature direct single-click note navigation and <kbd>Ctrl</kbd>+hover previews, while automatically preserving your Obsidian Graph View connections through seamless background link indexing!
 
 ---
 
@@ -72,6 +89,7 @@ While plugins like **Waypoint** introduced MOC (Map of Content) lists inside fol
 | **Auto-Create Notes** | Automatically create missing index notes during "Generate All" | `true` |
 | **Bubble Up Orphans** | Files in subfolders without an index note bubble up to parent | `true` |
 | **List Sorting** | How links are ordered (`folders-first`, `files-first`, `alphabetical`) | `folders-first` |
+| **Folder Note View Layout** | Layout format (`list`, `details`, `inline`, `chips`, `cards`, `content`) | `list` |
 | **Excluded Folders** | Folders ignored during scanning (e.g. `.trash, templates, assets`) | `.trash, .obsidian, templates...` |
 | **Excluded Tags** | Notes containing these tags are excluded (e.g. `#archive, #draft`) | `#archive, #draft` |
 | **Auto-Update on Change** | Debounced auto-sync when files are moved or created | `true` |

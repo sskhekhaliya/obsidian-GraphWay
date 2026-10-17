@@ -38,6 +38,7 @@
   color: var(--text-normal);
   background: linear-gradient(135deg, var(--interactive-accent), #a855f7);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -581,3 +582,191 @@
   border-radius: 8px;
   border: 1px solid var(--background-modifier-border);
 }
+
+/* ==========================================================================
+   Folder Note (MOC) View Layouts: Pills, Cards, Rows, and Details
+   ========================================================================== */
+
+/* 1. Neon Pills Layout (.graphway-pills) */
+.graphway-pills {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin: 14px 0 !important;
+}
+
+.graphway-pills ul {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.graphway-pill-item,
+.graphway-pills li {
+  background: rgba(139, 92, 246, 0.12) !important;
+  border: 1px solid rgba(139, 92, 246, 0.4) !important;
+  border-radius: 9999px !important;
+  padding: 6px 14px !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  color: var(--text-normal, #f3f4f6) !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  transition: all 0.18s ease-in-out !important;
+  cursor: pointer !important;
+}
+
+.graphway-pills li::marker {
+  content: none !important;
+}
+
+.graphway-pill-item:hover,
+.graphway-pills li:hover {
+  background: var(--interactive-accent, #8b5cf6) !important;
+  border-color: var(--interactive-accent, #8b5cf6) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) scale(1.03) !important;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.45) !important;
+}
+
+.graphway-pills li a,
+.graphway-pills li .internal-link {
+  color: var(--text-normal, #f3f4f6) !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+
+.graphway-pills li:hover a,
+.graphway-pills li:hover .internal-link {
+  color: #ffffff !important;
+}
+
+/* 2. Modern Cards Layout (.graphway-cards) */
+.graphway-cards {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+  gap: 12px !important;
+  margin: 16px 0 !important;
+}
+
+.graphway-cards ul {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+  gap: 12px !important;
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.graphway-card-item,
+.graphway-cards li {
+  background: var(--background-secondary, #1a1a24) !important;
+  border: 1px solid var(--background-modifier-border, rgba(255, 255, 255, 0.08)) !important;
+  border-radius: 10px !important;
+  padding: 12px 16px !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  color: var(--text-normal, #f3f4f6) !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+  font-size: 13.5px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+.graphway-cards li::marker {
+  content: none !important;
+}
+
+.graphway-card-item:hover,
+.graphway-cards li:hover {
+  border-color: var(--interactive-accent, #8b5cf6) !important;
+  color: var(--interactive-accent, #8b5cf6) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.3) !important;
+}
+
+.graphway-cards li a,
+.graphway-cards li .internal-link {
+  color: var(--text-normal, #f3f4f6) !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+}
+
+.graphway-cards li:hover a,
+.graphway-cards li:hover .internal-link {
+  color: var(--interactive-accent, #8b5cf6) !important;
+}
+
+/* 3. Horizontal Rows Layout (.graphway-rows) */
+.graphway-rows {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  margin: 14px 0 !important;
+}
+
+.graphway-rows ul {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.graphway-row-item,
+.graphway-rows li {
+  background: var(--background-secondary, #1a1a24) !important;
+  border: 1px solid var(--background-modifier-border, rgba(255, 255, 255, 0.08)) !important;
+  border-left: 3px solid #38bdf8 !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  color: var(--text-normal, #ffffff) !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  transition: all 0.15s ease !important;
+  cursor: pointer !important;
+}
+
+.graphway-rows li::marker {
+  content: none !important;
+}
+
+.graphway-row-item:hover,
+.graphway-rows li:hover {
+  background: var(--background-modifier-hover) !important;
+  border-color: #38bdf8 !important;
+  padding-left: 20px !important;
+}
+
+.graphway-row-item .graphway-row-right,
+.graphway-rows li em {
+  font-size: 11.5px !important;
+  color: var(--text-muted, #9ca3af) !important;
+  font-style: normal !important;
+}
+
+.graphway-rows li a,
+.graphway-rows li .internal-link {
+  color: var(--text-normal, #fff) !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+
+
+

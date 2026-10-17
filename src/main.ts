@@ -98,6 +98,38 @@ export default class GraphWayPlugin extends Plugin {
       }
     });
 
+    // Global click listener for rendered GraphWay cards and pills
+    this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement;
+      const card = target.closest('.graphway-card') as HTMLElement;
+      if (card) {
+        const href = card.getAttribute('data-href');
+        if (href) {
+          evt.preventDefault();
+          evt.stopPropagation();
+          this.app.workspace.openLinkText(href, '', evt.ctrlKey || evt.metaKey);
+        }
+      }
+    });
+
+    // Hover preview support for rendered GraphWay cards and pills
+    this.registerDomEvent(document, 'mouseover', (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement;
+      const card = target.closest('.graphway-card') as HTMLElement;
+      if (card && (evt.ctrlKey || evt.metaKey)) {
+        const href = card.getAttribute('data-href');
+        if (href) {
+          this.app.workspace.trigger('hover-link', {
+            event: evt,
+            source: 'graphway',
+            hoverParent: card,
+            targetEl: card,
+            linktext: href
+          });
+        }
+      }
+    });
+
     // Settings Tab
     this.addSettingTab(new GraphWaySettingsTab(this.app, this));
 
