@@ -131,7 +131,7 @@ export class HierarchyBuilder {
 
     const node: FolderHierarchyNode = {
       folderPath: folder.path,
-      folderName: isRoot ? (folderNote ? `🏠 ${folderDisplayName}` : 'Root') : folder.name,
+      folderName: isRoot ? (folderNote ? folderDisplayName : 'Root') : folder.name,
       depth,
       indexFilePath: folderNote ? folderNote.path : null,
       hasIndex: folderNote !== null,

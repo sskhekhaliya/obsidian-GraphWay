@@ -1,5 +1,5 @@
-import { App, TFolder, TFile, Notice, Menu } from 'obsidian';
-import { GraphWaySettings, FolderHierarchyNode, UnindexedFolderTree } from '../types';
+import { App, TFolder, TFile, Notice, Menu, setIcon } from 'obsidian';
+import { GraphWaySettings, FolderHierarchyNode, UnindexedFolderTree, RenderViewLayout } from '../types';
 import { VaultSynchronizer } from '../core/vaultSynchronizer';
 
 export class CanvasRenderer {
@@ -75,6 +75,12 @@ export class CanvasRenderer {
     this.render();
   }
 
+  public async refresh(): Promise<void> {
+    const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    this.updateData(hierarchy);
+    await this.synchronizer.syncExistingIndices();
+  }
+
   private buildDOM(): void {
     this.containerEl.empty();
     this.containerEl.addClass('graphway-canvas-root');
@@ -84,36 +90,63 @@ export class CanvasRenderer {
 
     // Logo & Stats
     const brand = toolbar.createDiv({ cls: 'graphway-brand' });
-    brand.createSpan({ text: '⚡ GraphWay', cls: 'graphway-title' });
+    const brandIcon = brand.createSpan({ cls: 'graphway-brand-icon' });
+    setIcon(brandIcon, 'network');
+    brand.createSpan({ text: 'GraphWay', cls: 'graphway-title' });
 
     // Action Buttons
     const actions = toolbar.createDiv({ cls: 'graphway-actions' });
 
+    const btnRefresh = actions.createEl('button', {
+      cls: 'graphway-btn',
+      title: 'Refresh Canvas and rescan vault hierarchy'
+    });
+    const refreshIcon = btnRefresh.createSpan({ cls: 'graphway-btn-icon' });
+    setIcon(refreshIcon, 'refresh-cw');
+    const refreshLabel = btnRefresh.createSpan({ text: 'Refresh' });
+    btnRefresh.onclick = async () => {
+      btnRefresh.disabled = true;
+      refreshLabel.setText('Refreshing...');
+      await this.refresh();
+      btnRefresh.disabled = false;
+      refreshLabel.setText('Refresh');
+      new Notice('GraphWay: Canvas refreshed.');
+    };
+
     const btnGenerate = actions.createEl('button', {
       cls: 'graphway-btn graphway-btn-primary',
-      text: '⚡ Generate All Vault'
+      title: 'Generate and write links for all folder notes in vault'
     });
+    const genIcon = btnGenerate.createSpan({ cls: 'graphway-btn-icon' });
+    setIcon(genIcon, 'zap');
+    const genLabel = btnGenerate.createSpan({ text: 'Generate All Vault' });
     btnGenerate.onclick = async () => {
       btnGenerate.disabled = true;
-      btnGenerate.setText('⏳ Generating...');
+      genLabel.setText('Generating...');
       await this.synchronizer.generateAll(true);
       btnGenerate.disabled = false;
-      btnGenerate.setText('⚡ Generate All Vault');
+      genLabel.setText('Generate All Vault');
       this.render();
     };
 
     const btnLayout = actions.createEl('button', {
       cls: 'graphway-btn',
-      text: '📐 Auto-Layout'
+      title: 'Auto-layout all folder cards neatly'
     });
+    const layoutIcon = btnLayout.createSpan({ cls: 'graphway-btn-icon' });
+    setIcon(layoutIcon, 'git-fork');
+    btnLayout.createSpan({ text: 'Auto-Layout' });
     btnLayout.onclick = () => {
       this.autoLayoutNodes();
     };
 
     const btnResetView = actions.createEl('button', {
       cls: 'graphway-btn',
-      text: '🎯 Center View'
+      title: 'Reset pan and zoom to center'
     });
+    const centerIcon = btnResetView.createSpan({ cls: 'graphway-btn-icon' });
+    setIcon(centerIcon, 'crosshair');
+    btnResetView.createSpan({ text: 'Center View' });
     btnResetView.onclick = () => {
       this.panX = 80;
       this.panY = 80;
@@ -123,10 +156,12 @@ export class CanvasRenderer {
 
     // Search filter
     const searchWrapper = toolbar.createDiv({ cls: 'graphway-search-wrap' });
+    const searchIcon = searchWrapper.createSpan({ cls: 'graphway-search-icon' });
+    setIcon(searchIcon, 'search');
     this.searchInput = searchWrapper.createEl('input', {
       cls: 'graphway-search-input',
       type: 'text',
-      placeholder: '🔍 Filter folders...'
+      placeholder: 'Filter folders...'
     });
     this.searchInput.oninput = () => {
       this.filterText = this.searchInput.value.toLowerCase().trim();
@@ -515,18 +550,36 @@ export class CanvasRenderer {
       }
     });
 
+    const cleanFolderName = node.folderName.replace(/^[🏠📁📄\s]+/, '') || node.folderName;
+
+    const currentCustomLayout = this.settings.folderViewLayouts?.[node.folderPath];
+    const effectiveLayout: RenderViewLayout = currentCustomLayout || this.settings.renderViewLayout || 'list';
+    const isCustomLayout = Boolean(currentCustomLayout);
+
+    const layoutLabels: Record<RenderViewLayout, { short: string; full: string; icon: string }> = {
+      list: { short: 'List', full: 'Classic List', icon: 'list' },
+      details: { short: 'Details', full: 'Details Table', icon: 'table' },
+      inline: { short: 'Inline', full: 'Inline Pills', icon: 'more-horizontal' },
+      chips: { short: 'Chips', full: 'Neon Chips', icon: 'tags' },
+      cards: { short: 'Cards', full: 'Modern Cards', icon: 'layout-grid' },
+      content: { short: 'Content', full: 'Glassmorphism Rows', icon: 'file-text' }
+    };
+
     const titleGroup = header.createDiv({ cls: 'graphway-node-title-group' });
     const titleRow = titleGroup.createDiv({ cls: 'graphway-node-title-row' });
-    titleRow.createSpan({ text: isHomepage ? '🏠 ' : '📁 ', cls: 'graphway-node-icon' });
-    titleRow.createSpan({ text: node.folderName, cls: 'graphway-node-title' });
+    const nodeIcon = titleRow.createSpan({ cls: 'graphway-node-icon' });
+    setIcon(nodeIcon, isHomepage ? 'home' : 'folder');
+    titleRow.createSpan({ text: cleanFolderName, cls: 'graphway-node-title' });
 
     // Index file name below top folder name
     const indexFileName = node.indexFilePath ? node.indexFilePath.split('/').pop() : null;
     if (indexFileName) {
       const subTitle = titleGroup.createDiv({
-        cls: 'graphway-node-index-subtitle',
-        text: `📄 ${indexFileName}`
+        cls: 'graphway-node-index-subtitle'
       });
+      const subTitleIcon = subTitle.createSpan({ cls: 'graphway-subtitle-icon' });
+      setIcon(subTitleIcon, 'file-text');
+      subTitle.createSpan({ text: indexFileName });
       subTitle.title = `Index note: ${node.indexFilePath}\nClick to open\nRight-click for options`;
       subTitle.onclick = (e) => {
         e.stopPropagation();
@@ -546,6 +599,14 @@ export class CanvasRenderer {
               if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
             });
         });
+        menu.addItem((item) => {
+          item
+            .setTitle(`View Layout: ${layoutLabels[effectiveLayout]?.full || 'List'}${isCustomLayout ? ' (Custom)' : ' (Default)'}`)
+            .setIcon(layoutLabels[effectiveLayout]?.icon || 'layout-grid')
+            .onClick(() => {
+              layoutBtn.click();
+            });
+        });
         if (this.settings.customFolderNotes && this.settings.customFolderNotes[node.folderPath]) {
           menu.addItem((item) => {
             item
@@ -560,9 +621,11 @@ export class CanvasRenderer {
       };
     } else {
       const noIndexBtn = titleGroup.createDiv({
-        cls: 'graphway-node-no-index',
-        text: '⚠️ No index (Click to create)'
+        cls: 'graphway-node-no-index'
       });
+      const noIndexIcon = noIndexBtn.createSpan({ cls: 'graphway-no-index-icon' });
+      setIcon(noIndexIcon, 'alert-circle');
+      noIndexBtn.createSpan({ text: 'No index (Click to create)' });
       noIndexBtn.title = 'Click to create folder index note';
       noIndexBtn.onclick = async (e) => {
         e.stopPropagation();
@@ -577,16 +640,15 @@ export class CanvasRenderer {
 
     const headerActions = header.createDiv({ cls: 'graphway-node-header-actions' });
 
-    // File visibility toggle button (Rendered vs Unrendered direct files in index note)
+    // File visibility toggle button (Icon only)
     if (node.hasIndex || node.directFiles.length > 0) {
       const renderBtn = headerActions.createSpan({
         cls: `graphway-file-toggle ${isFilesHidden ? 'graphway-file-toggle-off' : 'graphway-file-toggle-on'}`
       });
-      renderBtn.createSpan({ text: isFilesHidden ? '🚫' : '👁️', cls: 'graphway-toggle-icon' });
-      renderBtn.createSpan({ text: isFilesHidden ? 'Unrendered' : 'Rendered', cls: 'graphway-toggle-label' });
+      setIcon(renderBtn, isFilesHidden ? 'eye-off' : 'eye');
       renderBtn.title = isFilesHidden
-        ? `Direct files are UNRENDERED in "${node.folderName}" index note (GraphWay block removed if empty).\nClick to render files.`
-        : `Direct files are RENDERED in "${node.folderName}" index note.\nClick to unrender direct files.`;
+        ? `Direct files: UNRENDERED in "${cleanFolderName}" index note (GraphWay block removed if empty).\nClick to render files.`
+        : `Direct files: RENDERED in "${cleanFolderName}" index note.\nClick to unrender direct files.`;
 
       renderBtn.onclick = async (e) => {
         e.stopPropagation();
@@ -597,16 +659,81 @@ export class CanvasRenderer {
           this.settings.foldersHidingDirectFiles = this.settings.foldersHidingDirectFiles.filter(
             p => p !== node.folderPath
           );
-          new Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+          new Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
         } else {
           this.settings.foldersHidingDirectFiles.push(node.folderPath);
-          new Notice(`GraphWay: Direct files unrendered from "${node.folderName}" index note.`);
+          new Notice(`GraphWay: Direct files unrendered from "${cleanFolderName}" index note.`);
         }
         await this.onSettingsChange();
         await this.synchronizer.syncExistingIndices();
         this.render();
       };
     }
+
+    // View Layout switcher button (Icon only)
+    const layoutBtn = headerActions.createSpan({
+      cls: `graphway-layout-badge ${isCustomLayout ? 'graphway-layout-badge-custom' : 'graphway-layout-badge-default'}`
+    });
+    setIcon(layoutBtn, layoutLabels[effectiveLayout]?.icon || 'layout-grid');
+    layoutBtn.title = isCustomLayout
+      ? `View Layout: ${layoutLabels[effectiveLayout]?.full} (Folder specific override)\nClick to change or revert to Vault Default`
+      : `View Layout: ${layoutLabels[effectiveLayout]?.full} (Vault Default)\nClick to choose a specific view for this folder`;
+
+    layoutBtn.onclick = (e: MouseEvent) => {
+      e.stopPropagation();
+      const menu = new Menu();
+
+      const globalLayout = this.settings.renderViewLayout || 'list';
+      const globalLabel = layoutLabels[globalLayout]?.full || 'Classic List';
+
+      menu.addItem((item) => {
+        item
+          .setTitle(`Vault Default (${globalLabel})`)
+          .setIcon('rotate-ccw')
+          .setChecked(!isCustomLayout)
+          .onClick(async () => {
+            if (this.settings.folderViewLayouts) {
+              delete this.settings.folderViewLayouts[node.folderPath];
+            }
+            await this.onSettingsChange();
+            await this.synchronizer.syncExistingIndices();
+            this.render();
+            new Notice(`GraphWay: "${cleanFolderName}" reverted to default layout (${globalLabel}).`);
+          });
+      });
+
+      menu.addSeparator();
+
+      const options: { layout: RenderViewLayout; name: string; icon: string }[] = [
+        { layout: 'list', name: 'Classic List', icon: 'list' },
+        { layout: 'details', name: 'Details Table', icon: 'table' },
+        { layout: 'inline', name: 'Inline Pills', icon: 'more-horizontal' },
+        { layout: 'chips', name: 'Neon Chips', icon: 'tags' },
+        { layout: 'cards', name: 'Modern Cards', icon: 'layout-grid' },
+        { layout: 'content', name: 'Glassmorphism Rows', icon: 'file-text' }
+      ];
+
+      for (const opt of options) {
+        menu.addItem((item) => {
+          item
+            .setTitle(opt.name)
+            .setIcon(opt.icon)
+            .setChecked(currentCustomLayout === opt.layout)
+            .onClick(async () => {
+              if (!this.settings.folderViewLayouts) {
+                this.settings.folderViewLayouts = {};
+              }
+              this.settings.folderViewLayouts[node.folderPath] = opt.layout;
+              await this.onSettingsChange();
+              await this.synchronizer.syncExistingIndices();
+              this.render();
+              new Notice(`GraphWay: Set "${cleanFolderName}" view to ${opt.name}.`);
+            });
+        });
+      }
+
+      menu.showAtMouseEvent(e);
+    };
 
     const badge = headerActions.createSpan({
       cls: `graphway-badge ${
@@ -616,7 +743,7 @@ export class CanvasRenderer {
           ? 'graphway-badge-ok'
           : 'graphway-badge-warn'
       }`,
-      text: isHomepage ? '🏠 HOMEPAGE' : node.hasIndex ? 'INDEXED' : 'NO INDEX'
+      text: isHomepage ? 'HOMEPAGE' : node.hasIndex ? 'INDEXED' : 'NO INDEX'
     });
     badge.title = node.hasIndex
       ? `Click to un-index (detach index note and convert to normal note)`
@@ -639,9 +766,10 @@ export class CanvasRenderer {
     const renderIndexedChildFolders = () => {
       for (const child of node.indexedChildFolders) {
         const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-child-folder-row' });
-        itemRow.createSpan({ text: '📁', cls: 'graphway-item-icon' });
+        const folderIcon = itemRow.createSpan({ cls: 'graphway-item-icon' });
+        setIcon(folderIcon, 'folder');
         const nameSpan = itemRow.createSpan({
-          text: child.folderName,
+          text: child.folderName.replace(/^[🏠📁📄\s]+/, ''),
           cls: 'graphway-item-name graphway-child-folder-name'
         });
         nameSpan.title = `Child folder: ${child.folderPath}\nClick to pan canvas to this folder`;
@@ -649,7 +777,8 @@ export class CanvasRenderer {
           this.centerOnFolder(child.folderPath);
         };
 
-        const openBtn = itemRow.createSpan({ text: '📄', cls: 'graphway-mini-open' });
+        const openBtn = itemRow.createSpan({ cls: 'graphway-mini-open' });
+        setIcon(openBtn, 'file-text');
         openBtn.title = `Open index note: ${child.indexFilePath.split('/').pop()}`;
         openBtn.onclick = (e) => {
           e.stopPropagation();
@@ -664,15 +793,17 @@ export class CanvasRenderer {
       const renderTreeInCard = (tree: UnindexedFolderTree, container: HTMLElement, indent: number) => {
         const fRow = container.createDiv({ cls: 'graphway-item-row' });
         fRow.style.paddingLeft = `${4 + indent * 10}px`;
-        fRow.createSpan({ text: '📁', cls: 'graphway-item-icon' });
-        fRow.createSpan({ text: tree.folderName, cls: 'graphway-item-name graphway-unindexed-name' });
+        const fIcon = fRow.createSpan({ cls: 'graphway-item-icon' });
+        setIcon(fIcon, 'folder');
+        fRow.createSpan({ text: tree.folderName.replace(/^[🏠📁📄\s]+/, ''), cls: 'graphway-item-name graphway-unindexed-name' });
 
         for (const filePath of tree.files) {
           const fileName = filePath.split('/').pop()?.replace(/\.md$/, '') || filePath;
           const itemRow = container.createDiv({ cls: 'graphway-item-row' });
           itemRow.setAttribute('data-filepath', filePath);
           itemRow.style.paddingLeft = `${14 + indent * 10}px`;
-          itemRow.createSpan({ text: '↳ 📄', cls: 'graphway-item-icon' });
+          const fileIcon = itemRow.createSpan({ cls: 'graphway-item-icon' });
+          setIcon(fileIcon, 'file-text');
           const nameSpan = itemRow.createSpan({ text: fileName, cls: 'graphway-item-name' });
           nameSpan.onclick = () => {
             const f = this.app.vault.getAbstractFileByPath(filePath);
@@ -740,7 +871,8 @@ export class CanvasRenderer {
       if (isFilesHidden) {
         if (node.directFiles.length > 0) {
           const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-files-hidden-row' });
-          itemRow.createSpan({ text: '🚫', cls: 'graphway-item-icon' });
+          const eyeOffIcon = itemRow.createSpan({ cls: 'graphway-item-icon' });
+          setIcon(eyeOffIcon, 'eye-off');
           const nameSpan = itemRow.createSpan({
             text: `${node.directFiles.length} direct file(s) unrendered`,
             cls: 'graphway-item-name graphway-files-hidden-label'
@@ -751,7 +883,7 @@ export class CanvasRenderer {
               p => p !== node.folderPath
             );
             await this.onSettingsChange();
-            new Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+            new Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
             await this.synchronizer.syncExistingIndices();
             this.render();
           };
@@ -764,7 +896,8 @@ export class CanvasRenderer {
         const itemRow = body.createDiv({ cls: 'graphway-item-row' });
         itemRow.setAttribute('data-filepath', filePath);
 
-        itemRow.createSpan({ text: '📄', cls: 'graphway-item-icon' });
+        const fileIcon = itemRow.createSpan({ cls: 'graphway-item-icon' });
+        setIcon(fileIcon, 'file-text');
         const nameSpan = itemRow.createSpan({ text: fileName, cls: 'graphway-item-name' });
         nameSpan.onclick = () => {
           const f = this.app.vault.getAbstractFileByPath(filePath);
@@ -826,18 +959,20 @@ export class CanvasRenderer {
           const fileName = filePath.split('/').pop()?.replace(/\.md$/, '') || filePath;
           const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-custom-override-row' });
           itemRow.setAttribute('data-filepath', filePath);
-          itemRow.createSpan({ text: '🔗 📄', cls: 'graphway-item-icon' });
+          const linkIcon = itemRow.createSpan({ cls: 'graphway-item-icon' });
+          setIcon(linkIcon, 'link');
           const nameSpan = itemRow.createSpan({
             text: `${fileName} (Custom Link)`,
             cls: 'graphway-item-name graphway-custom-override-name'
           });
-          nameSpan.title = `External linked file: ${filePath}\nClick to open\nClick ✕ to remove link`;
+          nameSpan.title = `External linked file: ${filePath}\nClick to open\nClick to remove link`;
           nameSpan.onclick = () => {
             const f = this.app.vault.getAbstractFileByPath(filePath);
             if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
           };
 
-          const removeBtn = itemRow.createSpan({ text: '✕', cls: 'graphway-mini-remove' });
+          const removeBtn = itemRow.createSpan({ cls: 'graphway-mini-remove' });
+          setIcon(removeBtn, 'x');
           removeBtn.title = 'Remove custom link';
           removeBtn.onclick = async (e) => {
             e.stopPropagation();
@@ -1213,7 +1348,7 @@ export class CanvasRenderer {
         }
         const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
         this.updateData(hierarchy);
-        this.app.workspace.getLeaf().openFile(newFile);
+        new Notice(`GraphWay: Created index note "${newFile.basename}" for "${node.folderName}".`);
       }
     }
   }

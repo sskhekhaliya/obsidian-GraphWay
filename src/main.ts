@@ -163,6 +163,9 @@ export default class GraphWayPlugin extends Plugin {
 
   public async loadSettings(): Promise<void> {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    if (!this.settings.folderViewLayouts) {
+      this.settings.folderViewLayouts = {};
+    }
   }
 
   public async saveSettings(): Promise<void> {

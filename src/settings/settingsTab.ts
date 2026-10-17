@@ -144,8 +144,8 @@ export class GraphWaySettingsTab extends PluginSettingTab {
 
     // View Layout
     new Setting(containerEl)
-      .setName('Folder Note View Layout')
-      .setDesc('Select the layout style for folder notes (MOCs), inspired by system folder views.')
+      .setName('Default Folder Note View Layout')
+      .setDesc('Select the vault default layout style for folder notes. Changing this default will NOT override folders that have a specific view set in the Graph View.')
       .addDropdown(drop => {
         drop
           .addOption('list', 'Classic List (bullet list with icons)')
@@ -160,6 +160,29 @@ export class GraphWaySettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             await this.plugin.synchronizer.syncExistingIndices();
             new Notice(`GraphWay: View layout updated to "${val}". Folder notes refreshed.`);
+          });
+      });
+
+    const customLayoutFolders = Object.keys(this.plugin.settings.folderViewLayouts || {});
+    const customCount = customLayoutFolders.length;
+
+    new Setting(containerEl)
+      .setName('Reset All Views to Default')
+      .setDesc(
+        customCount > 0
+          ? `${customCount} folder(s) currently have a specific view assigned. Only this button will reset all specific folder views to default.`
+          : 'Reset all specific folder views to the vault default layout (no specific views currently set).'
+      )
+      .addButton(btn => {
+        btn
+          .setButtonText('Reset All Views to Default')
+          .setWarning()
+          .onClick(async () => {
+            this.plugin.settings.folderViewLayouts = {};
+            await this.plugin.saveSettings();
+            await this.plugin.synchronizer.syncExistingIndices();
+            new Notice('GraphWay: All folder views reset to default.');
+            this.display();
           });
       });
 

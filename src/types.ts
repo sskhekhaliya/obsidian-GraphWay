@@ -41,6 +41,8 @@ export interface GraphWaySettings {
   foldersHidingDirectFiles: string[];
   // Folders that the user explicitly unindexed (must not be auto-detected as index notes)
   unindexedFolderPaths: string[];
+  // Specific view layout overrides per folder: folderPath -> RenderViewLayout
+  folderViewLayouts: Record<string, RenderViewLayout>;
   // Saved canvas node positions: key is folderPath
   nodePositions: Record<string, { x: number; y: number }>;
 }
@@ -69,6 +71,7 @@ export const DEFAULT_SETTINGS: GraphWaySettings = {
   customFolderNotes: {},
   foldersHidingDirectFiles: [],
   unindexedFolderPaths: [],
+  folderViewLayouts: {},
   nodePositions: {}
 };
 

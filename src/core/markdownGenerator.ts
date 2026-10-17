@@ -1,4 +1,4 @@
-import { App, TFile } from 'obsidian';
+import { App, TFile, getIcon } from 'obsidian';
 import { GraphWaySettings, FolderHierarchyNode, UnindexedFolderTree } from '../types';
 
 export interface GraphWayItem {
@@ -25,6 +25,28 @@ export class MarkdownGenerator {
     this.settings = settings;
   }
 
+  private getFolderIcon(): string {
+    const el = getIcon('folder');
+    if (el) {
+      el.setAttribute('width', '14');
+      el.setAttribute('height', '14');
+      el.setAttribute('style', 'display:inline-block; vertical-align:text-bottom; margin-right:4px;');
+      return el.outerHTML;
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder" style="display:inline-block; vertical-align:text-bottom; margin-right:4px;"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
+  }
+
+  private getFileIcon(): string {
+    const el = getIcon('file-text');
+    if (el) {
+      el.setAttribute('width', '14');
+      el.setAttribute('height', '14');
+      el.setAttribute('style', 'display:inline-block; vertical-align:text-bottom; margin-right:4px;');
+      return el.outerHTML;
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file-text" style="display:inline-block; vertical-align:text-bottom; margin-right:4px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>';
+  }
+
   /**
    * Recursively renders an unindexed folder tree with markdown hierarchy
    */
@@ -38,14 +60,14 @@ export class MarkdownGenerator {
     const lines: string[] = [];
 
     // Header bullet for the folder
-    lines.push(`${indent}- 📁 ${tree.folderName}`);
+    lines.push(`${indent}- ${this.getFolderIcon()} ${tree.folderName}`);
 
     // Direct files indented under this folder
     for (const filePath of tree.files) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (file instanceof TFile) {
         const link = this.app.fileManager.generateMarkdownLink(file, originFolderPath);
-        lines.push(`${childIndent}- 📄 ${link}`);
+        lines.push(`${childIndent}- ${this.getFileIcon()} ${link}`);
       }
     }
 
@@ -202,7 +224,8 @@ export class MarkdownGenerator {
       sortedAllItems.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     }
 
-    const layout = this.settings.renderViewLayout || 'list';
+    const folderLayout = this.settings.folderViewLayouts?.[node.folderPath];
+    const layout = folderLayout || this.settings.renderViewLayout || 'list';
 
     if (layout === 'details') {
       return this.renderDetailsLayout(sortedAllItems);
@@ -223,7 +246,7 @@ export class MarkdownGenerator {
   private renderInlineLayout(items: GraphWayItem[]): string {
     return items
       .map(item => {
-        const icon = item.kind === 'folder' ? '📁' : '📄';
+        const icon = item.kind === 'folder' ? this.getFolderIcon() : this.getFileIcon();
         return `${icon} ${item.link}`;
       })
       .join('  •  ');
@@ -244,17 +267,17 @@ export class MarkdownGenerator {
     }
 
     if (this.settings.sortOrder === 'folders-first') {
-      for (const f of folderItems) lines.push(`- 📁 ${f.link}`);
+      for (const f of folderItems) lines.push(`- ${this.getFolderIcon()} ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
-      for (const f of fileItems) lines.push(`- 📄 ${f.link}`);
+      for (const f of fileItems) lines.push(`- ${this.getFileIcon()} ${f.link}`);
     } else if (this.settings.sortOrder === 'files-first') {
-      for (const f of fileItems) lines.push(`- 📄 ${f.link}`);
-      for (const f of folderItems) lines.push(`- 📁 ${f.link}`);
+      for (const f of fileItems) lines.push(`- ${this.getFileIcon()} ${f.link}`);
+      for (const f of folderItems) lines.push(`- ${this.getFolderIcon()} ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
     } else {
       const combined: { name: string; line: string }[] = [
-        ...folderItems.map(f => ({ name: f.name, line: `- 📁 ${f.link}` })),
-        ...fileItems.map(f => ({ name: f.name, line: `- 📄 ${f.link}` }))
+        ...folderItems.map(f => ({ name: f.name, line: `- ${this.getFolderIcon()} ${f.link}` })),
+        ...fileItems.map(f => ({ name: f.name, line: `- ${this.getFileIcon()} ${f.link}` }))
       ];
       combined.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
       for (const item of combined) lines.push(item.line);
@@ -269,7 +292,7 @@ export class MarkdownGenerator {
     lines.push('| Name | Type | Modified | Size |');
     lines.push('| :--- | :--- | :--- | :--- |');
     for (const item of items) {
-      const icon = item.kind === 'folder' ? '📁' : '📄';
+      const icon = item.kind === 'folder' ? this.getFolderIcon() : this.getFileIcon();
       const typeLabel = item.folderContext ? `${item.type} (${item.folderContext})` : item.type;
       // In Markdown tables, unescaped '|' inside wikilinks splits the table cells.
       const safeLink = item.link.replace(/\|/g, '\\|');
@@ -281,7 +304,7 @@ export class MarkdownGenerator {
   private renderCardsLayout(items: GraphWayItem[]): string {
     const hiddenGraphLinks = items.map(i => i.link).join(' ');
     const cardsHtml = items.map(item => {
-      const icon = item.kind === 'folder' ? '📁' : '📄';
+      const icon = item.kind === 'folder' ? this.getFolderIcon() : this.getFileIcon();
       return `<a class="graphway-card graphway-card-item" data-href="${item.targetPath}">` +
         `<span class="graphway-card-icon">${icon}</span>` +
         `<span class="graphway-card-name">${item.name}</span>` +
@@ -294,7 +317,7 @@ export class MarkdownGenerator {
   private renderChipsLayout(items: GraphWayItem[]): string {
     const hiddenGraphLinks = items.map(i => i.link).join(' ');
     const pillsHtml = items.map(item => {
-      const icon = item.kind === 'folder' ? '📁' : '📄';
+      const icon = item.kind === 'folder' ? this.getFolderIcon() : this.getFileIcon();
       return `<a class="graphway-card graphway-pill-item" data-href="${item.targetPath}">${icon} ${item.name}</a>`;
     }).join('\n  ');
 
@@ -304,7 +327,7 @@ export class MarkdownGenerator {
   private renderContentLayout(items: GraphWayItem[]): string {
     const hiddenGraphLinks = items.map(i => i.link).join(' ');
     const rowsHtml = items.map(item => {
-      const icon = item.kind === 'folder' ? '📁' : '📄';
+      const icon = item.kind === 'folder' ? this.getFolderIcon() : this.getFileIcon();
       return `<a class="graphway-card graphway-row-item" data-href="${item.targetPath}">` +
         `<span class="graphway-row-left">${icon} ${item.name}</span>` +
         `<span class="graphway-row-right">${item.modified}</span>` +

@@ -63,6 +63,133 @@
   transition: all 0.15s ease-in-out;
 }
 
+.graphway-node-icon,
+.graphway-subtitle-icon,
+.graphway-no-index-icon,
+.graphway-item-icon,
+.graphway-mini-open,
+.graphway-mini-remove,
+.graphway-brand-icon,
+.graphway-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.graphway-node-icon svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.graphway-node-homepage .graphway-node-icon svg {
+  color: #fbbf24;
+}
+
+.graphway-subtitle-icon svg {
+  width: 11px;
+  height: 11px;
+  color: var(--text-muted);
+}
+
+.graphway-no-index-icon svg {
+  width: 11px;
+  height: 11px;
+  color: #f59e0b;
+}
+
+.graphway-item-icon svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-muted);
+}
+
+.graphway-child-folder-row .graphway-item-icon svg {
+  color: var(--interactive-accent);
+}
+
+.graphway-mini-open svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
+}
+
+.graphway-mini-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+.graphway-brand-icon svg {
+  width: 16px;
+  height: 16px;
+  color: var(--interactive-accent);
+}
+
+.graphway-btn-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.graphway-file-toggle svg,
+.graphway-layout-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+.graphway-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.graphway-search-icon {
+  position: absolute;
+  left: 9px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.graphway-search-icon svg {
+  width: 13px;
+  height: 13px;
+  color: var(--text-muted);
+}
+
+.graphway-search-input {
+  padding: 5px 10px 5px 28px !important;
+  font-size: 12px;
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  border-radius: 6px !important;
+  color: var(--text-normal) !important;
+  width: 160px;
+  transition: all 0.15s ease-in-out;
+}
+
+.graphway-search-input:focus {
+  border-color: var(--interactive-accent) !important;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25) !important;
+  width: 200px;
+}
+
+/* Rendered markdown layout icons */
+.graphway-card-icon svg,
+.graphway-pill-item svg,
+.graphway-row-item svg,
+.graphway-cards svg,
+.graphway-pills svg,
+.graphway-rows svg {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: text-bottom;
+  flex-shrink: 0;
+}
+
 .graphway-btn:hover {
   background: var(--background-modifier-hover);
   border-color: var(--interactive-accent);
@@ -84,27 +211,6 @@
   color: #ffffff;
 }
 
-.graphway-search-wrap {
-  display: flex;
-  align-items: center;
-}
-
-.graphway-search-input {
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--text-normal);
-  outline: none;
-  width: 180px;
-  transition: width 0.2s ease, border-color 0.2s ease;
-}
-
-.graphway-search-input:focus {
-  border-color: var(--interactive-accent);
-  width: 240px;
-}
 
 /* 2. Viewport & Canvas Background (Dot-grid like Blender / ComfyUI) */
 .graphway-viewport {
@@ -376,19 +482,22 @@
 }
 
 .graphway-file-toggle {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
+  font-size: 11px;
+  padding: 2px 5px;
+  min-width: 22px;
+  height: 20px;
+  box-sizing: border-box;
   border-radius: 6px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   color: var(--text-muted);
   user-select: none;
   transition: all 0.15s ease;
+  line-height: 1;
 }
 
 .graphway-file-toggle:hover {
@@ -427,6 +536,48 @@
 
 .graphway-files-hidden-label {
   color: #f87171;
+}
+
+.graphway-layout-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 5px;
+  min-width: 22px;
+  height: 20px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1;
+}
+
+.graphway-layout-badge-default {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.graphway-layout-badge-default:hover {
+  background: rgba(148, 163, 184, 0.22);
+  color: #f1f5f9;
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.graphway-layout-badge-custom {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.25);
+}
+
+.graphway-layout-badge-custom:hover {
+  background: rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+  border-color: rgba(129, 140, 248, 0.65);
 }
 
 .graphway-badge {

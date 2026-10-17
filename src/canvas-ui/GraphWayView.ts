@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import { CanvasRenderer } from './canvasRenderer';
 import { VaultSynchronizer } from '../core/vaultSynchronizer';
 import { HierarchyBuilder } from '../core/hierarchyBuilder';
@@ -43,6 +43,14 @@ export class GraphWayView extends ItemView {
   public async onOpen(): Promise<void> {
     const container = this.contentEl;
     container.empty();
+
+    // Add view header action for refreshing canvas
+    this.addAction('refresh-cw', 'Refresh Canvas', async () => {
+      if (this.renderer) {
+        await this.renderer.refresh();
+        new Notice('GraphWay: Canvas refreshed.');
+      }
+    });
 
     this.renderer = new CanvasRenderer(
       container,

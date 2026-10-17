@@ -50,6 +50,7 @@ var DEFAULT_SETTINGS = {
   customFolderNotes: {},
   foldersHidingDirectFiles: [],
   unindexedFolderPaths: [],
+  folderViewLayouts: {},
   nodePositions: {}
 };
 
@@ -300,7 +301,7 @@ var HierarchyBuilder = class {
     }
     const node = {
       folderPath: folder.path,
-      folderName: isRoot ? folderNote ? `\u{1F3E0} ${folderDisplayName}` : "Root" : folder.name,
+      folderName: isRoot ? folderNote ? folderDisplayName : "Root" : folder.name,
       depth,
       indexFilePath: folderNote ? folderNote.path : null,
       hasIndex: folderNote !== null,
@@ -389,6 +390,26 @@ var MarkdownGenerator = class {
   updateSettings(settings) {
     this.settings = settings;
   }
+  getFolderIcon() {
+    const el = (0, import_obsidian3.getIcon)("folder");
+    if (el) {
+      el.setAttribute("width", "14");
+      el.setAttribute("height", "14");
+      el.setAttribute("style", "display:inline-block; vertical-align:text-bottom; margin-right:4px;");
+      return el.outerHTML;
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder" style="display:inline-block; vertical-align:text-bottom; margin-right:4px;"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>';
+  }
+  getFileIcon() {
+    const el = (0, import_obsidian3.getIcon)("file-text");
+    if (el) {
+      el.setAttribute("width", "14");
+      el.setAttribute("height", "14");
+      el.setAttribute("style", "display:inline-block; vertical-align:text-bottom; margin-right:4px;");
+      return el.outerHTML;
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file-text" style="display:inline-block; vertical-align:text-bottom; margin-right:4px;"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>';
+  }
   /**
    * Recursively renders an unindexed folder tree with markdown hierarchy
    */
@@ -396,12 +417,12 @@ var MarkdownGenerator = class {
     const indent = "  ".repeat(indentLevel);
     const childIndent = "  ".repeat(indentLevel + 1);
     const lines = [];
-    lines.push(`${indent}- \u{1F4C1} ${tree.folderName}`);
+    lines.push(`${indent}- ${this.getFolderIcon()} ${tree.folderName}`);
     for (const filePath of tree.files) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (file instanceof import_obsidian3.TFile) {
         const link = this.app.fileManager.generateMarkdownLink(file, originFolderPath);
-        lines.push(`${childIndent}- \u{1F4C4} ${link}`);
+        lines.push(`${childIndent}- ${this.getFileIcon()} ${link}`);
       }
     }
     for (const subTree of tree.childTrees) {
@@ -526,7 +547,8 @@ var MarkdownGenerator = class {
       sortedAllItems = [...folderItems, ...fileItems, ...unindexedItems];
       sortedAllItems.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
     }
-    const layout = this.settings.renderViewLayout || "list";
+    const folderLayout = this.settings.folderViewLayouts?.[node.folderPath];
+    const layout = folderLayout || this.settings.renderViewLayout || "list";
     if (layout === "details") {
       return this.renderDetailsLayout(sortedAllItems);
     } else if (layout === "inline") {
@@ -543,7 +565,7 @@ var MarkdownGenerator = class {
   }
   renderInlineLayout(items) {
     return items.map((item) => {
-      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      const icon = item.kind === "folder" ? this.getFolderIcon() : this.getFileIcon();
       return `${icon} ${item.link}`;
     }).join("  \u2022  ");
   }
@@ -556,17 +578,17 @@ var MarkdownGenerator = class {
       }
     }
     if (this.settings.sortOrder === "folders-first") {
-      for (const f of folderItems) lines.push(`- \u{1F4C1} ${f.link}`);
+      for (const f of folderItems) lines.push(`- ${this.getFolderIcon()} ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
-      for (const f of fileItems) lines.push(`- \u{1F4C4} ${f.link}`);
+      for (const f of fileItems) lines.push(`- ${this.getFileIcon()} ${f.link}`);
     } else if (this.settings.sortOrder === "files-first") {
-      for (const f of fileItems) lines.push(`- \u{1F4C4} ${f.link}`);
-      for (const f of folderItems) lines.push(`- \u{1F4C1} ${f.link}`);
+      for (const f of fileItems) lines.push(`- ${this.getFileIcon()} ${f.link}`);
+      for (const f of folderItems) lines.push(`- ${this.getFolderIcon()} ${f.link}`);
       for (const u of unindexedLines) lines.push(u);
     } else {
       const combined = [
-        ...folderItems.map((f) => ({ name: f.name, line: `- \u{1F4C1} ${f.link}` })),
-        ...fileItems.map((f) => ({ name: f.name, line: `- \u{1F4C4} ${f.link}` }))
+        ...folderItems.map((f) => ({ name: f.name, line: `- ${this.getFolderIcon()} ${f.link}` })),
+        ...fileItems.map((f) => ({ name: f.name, line: `- ${this.getFileIcon()} ${f.link}` }))
       ];
       combined.sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
       for (const item of combined) lines.push(item.line);
@@ -579,7 +601,7 @@ var MarkdownGenerator = class {
     lines.push("| Name | Type | Modified | Size |");
     lines.push("| :--- | :--- | :--- | :--- |");
     for (const item of items) {
-      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      const icon = item.kind === "folder" ? this.getFolderIcon() : this.getFileIcon();
       const typeLabel = item.folderContext ? `${item.type} (${item.folderContext})` : item.type;
       const safeLink = item.link.replace(/\|/g, "\\|");
       lines.push(`| ${icon} ${safeLink} | ${typeLabel} | ${item.modified} | ${item.size} |`);
@@ -589,7 +611,7 @@ var MarkdownGenerator = class {
   renderCardsLayout(items) {
     const hiddenGraphLinks = items.map((i) => i.link).join(" ");
     const cardsHtml = items.map((item) => {
-      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      const icon = item.kind === "folder" ? this.getFolderIcon() : this.getFileIcon();
       return `<a class="graphway-card graphway-card-item" data-href="${item.targetPath}"><span class="graphway-card-icon">${icon}</span><span class="graphway-card-name">${item.name}</span></a>`;
     }).join("\n  ");
     return `%% ${hiddenGraphLinks} %%
@@ -600,7 +622,7 @@ var MarkdownGenerator = class {
   renderChipsLayout(items) {
     const hiddenGraphLinks = items.map((i) => i.link).join(" ");
     const pillsHtml = items.map((item) => {
-      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      const icon = item.kind === "folder" ? this.getFolderIcon() : this.getFileIcon();
       return `<a class="graphway-card graphway-pill-item" data-href="${item.targetPath}">${icon} ${item.name}</a>`;
     }).join("\n  ");
     return `%% ${hiddenGraphLinks} %%
@@ -611,7 +633,7 @@ var MarkdownGenerator = class {
   renderContentLayout(items) {
     const hiddenGraphLinks = items.map((i) => i.link).join(" ");
     const rowsHtml = items.map((item) => {
-      const icon = item.kind === "folder" ? "\u{1F4C1}" : "\u{1F4C4}";
+      const icon = item.kind === "folder" ? this.getFolderIcon() : this.getFileIcon();
       return `<a class="graphway-card graphway-row-item" data-href="${item.targetPath}"><span class="graphway-row-left">${icon} ${item.name}</span><span class="graphway-row-right">${item.modified}</span></a>`;
     }).join("\n  ");
     return `%% ${hiddenGraphLinks} %%
@@ -1073,12 +1095,25 @@ var GraphWaySettingsTab = class extends import_obsidian6.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian6.Setting(containerEl).setName("Folder Note View Layout").setDesc("Select the layout style for folder notes (MOCs), inspired by system folder views.").addDropdown((drop) => {
+    new import_obsidian6.Setting(containerEl).setName("Default Folder Note View Layout").setDesc("Select the vault default layout style for folder notes. Changing this default will NOT override folders that have a specific view set in the Graph View.").addDropdown((drop) => {
       drop.addOption("list", "Classic List (bullet list with icons)").addOption("details", "Details (markdown table with Name, Type, Modified, Size)").addOption("inline", "Inline Pills (horizontal \u2022 separated, no bullets)").addOption("chips", "Neon Pills (styled capsule list, no tags)").addOption("cards", "Modern Cards (card grid layout)").addOption("content", "Glassmorphism Rows (translucent rows with left accent border)").setValue(this.plugin.settings.renderViewLayout || "list").onChange(async (val) => {
         this.plugin.settings.renderViewLayout = val;
         await this.plugin.saveSettings();
         await this.plugin.synchronizer.syncExistingIndices();
         new import_obsidian6.Notice(`GraphWay: View layout updated to "${val}". Folder notes refreshed.`);
+      });
+    });
+    const customLayoutFolders = Object.keys(this.plugin.settings.folderViewLayouts || {});
+    const customCount = customLayoutFolders.length;
+    new import_obsidian6.Setting(containerEl).setName("Reset All Views to Default").setDesc(
+      customCount > 0 ? `${customCount} folder(s) currently have a specific view assigned. Only this button will reset all specific folder views to default.` : "Reset all specific folder views to the vault default layout (no specific views currently set)."
+    ).addButton((btn) => {
+      btn.setButtonText("Reset All Views to Default").setWarning().onClick(async () => {
+        this.plugin.settings.folderViewLayouts = {};
+        await this.plugin.saveSettings();
+        await this.plugin.synchronizer.syncExistingIndices();
+        new import_obsidian6.Notice("GraphWay: All folder views reset to default.");
+        this.display();
       });
     });
     containerEl.createEl("h3", { text: "\u26A1 Exclusions & Triggers" });
@@ -1159,36 +1194,67 @@ var CanvasRenderer = class {
     this.hierarchy = hierarchy;
     this.render();
   }
+  async refresh() {
+    const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    this.updateData(hierarchy);
+    await this.synchronizer.syncExistingIndices();
+  }
   buildDOM() {
     this.containerEl.empty();
     this.containerEl.addClass("graphway-canvas-root");
     const toolbar = this.containerEl.createDiv({ cls: "graphway-toolbar" });
     const brand = toolbar.createDiv({ cls: "graphway-brand" });
-    brand.createSpan({ text: "\u26A1 GraphWay", cls: "graphway-title" });
+    const brandIcon = brand.createSpan({ cls: "graphway-brand-icon" });
+    (0, import_obsidian7.setIcon)(brandIcon, "network");
+    brand.createSpan({ text: "GraphWay", cls: "graphway-title" });
     const actions = toolbar.createDiv({ cls: "graphway-actions" });
+    const btnRefresh = actions.createEl("button", {
+      cls: "graphway-btn",
+      title: "Refresh Canvas and rescan vault hierarchy"
+    });
+    const refreshIcon = btnRefresh.createSpan({ cls: "graphway-btn-icon" });
+    (0, import_obsidian7.setIcon)(refreshIcon, "refresh-cw");
+    const refreshLabel = btnRefresh.createSpan({ text: "Refresh" });
+    btnRefresh.onclick = async () => {
+      btnRefresh.disabled = true;
+      refreshLabel.setText("Refreshing...");
+      await this.refresh();
+      btnRefresh.disabled = false;
+      refreshLabel.setText("Refresh");
+      new import_obsidian7.Notice("GraphWay: Canvas refreshed.");
+    };
     const btnGenerate = actions.createEl("button", {
       cls: "graphway-btn graphway-btn-primary",
-      text: "\u26A1 Generate All Vault"
+      title: "Generate and write links for all folder notes in vault"
     });
+    const genIcon = btnGenerate.createSpan({ cls: "graphway-btn-icon" });
+    (0, import_obsidian7.setIcon)(genIcon, "zap");
+    const genLabel = btnGenerate.createSpan({ text: "Generate All Vault" });
     btnGenerate.onclick = async () => {
       btnGenerate.disabled = true;
-      btnGenerate.setText("\u23F3 Generating...");
+      genLabel.setText("Generating...");
       await this.synchronizer.generateAll(true);
       btnGenerate.disabled = false;
-      btnGenerate.setText("\u26A1 Generate All Vault");
+      genLabel.setText("Generate All Vault");
       this.render();
     };
     const btnLayout = actions.createEl("button", {
       cls: "graphway-btn",
-      text: "\u{1F4D0} Auto-Layout"
+      title: "Auto-layout all folder cards neatly"
     });
+    const layoutIcon = btnLayout.createSpan({ cls: "graphway-btn-icon" });
+    (0, import_obsidian7.setIcon)(layoutIcon, "git-fork");
+    btnLayout.createSpan({ text: "Auto-Layout" });
     btnLayout.onclick = () => {
       this.autoLayoutNodes();
     };
     const btnResetView = actions.createEl("button", {
       cls: "graphway-btn",
-      text: "\u{1F3AF} Center View"
+      title: "Reset pan and zoom to center"
     });
+    const centerIcon = btnResetView.createSpan({ cls: "graphway-btn-icon" });
+    (0, import_obsidian7.setIcon)(centerIcon, "crosshair");
+    btnResetView.createSpan({ text: "Center View" });
     btnResetView.onclick = () => {
       this.panX = 80;
       this.panY = 80;
@@ -1196,10 +1262,12 @@ var CanvasRenderer = class {
       this.updateTransform();
     };
     const searchWrapper = toolbar.createDiv({ cls: "graphway-search-wrap" });
+    const searchIcon = searchWrapper.createSpan({ cls: "graphway-search-icon" });
+    (0, import_obsidian7.setIcon)(searchIcon, "search");
     this.searchInput = searchWrapper.createEl("input", {
       cls: "graphway-search-input",
       type: "text",
-      placeholder: "\u{1F50D} Filter folders..."
+      placeholder: "Filter folders..."
     });
     this.searchInput.oninput = () => {
       this.filterText = this.searchInput.value.toLowerCase().trim();
@@ -1497,16 +1565,31 @@ var CanvasRenderer = class {
         this.selectedInitialPositions.set(id, { ...p });
       }
     });
+    const cleanFolderName = node.folderName.replace(/^[🏠📁📄\s]+/, "") || node.folderName;
+    const currentCustomLayout = this.settings.folderViewLayouts?.[node.folderPath];
+    const effectiveLayout = currentCustomLayout || this.settings.renderViewLayout || "list";
+    const isCustomLayout = Boolean(currentCustomLayout);
+    const layoutLabels = {
+      list: { short: "List", full: "Classic List", icon: "list" },
+      details: { short: "Details", full: "Details Table", icon: "table" },
+      inline: { short: "Inline", full: "Inline Pills", icon: "more-horizontal" },
+      chips: { short: "Chips", full: "Neon Chips", icon: "tags" },
+      cards: { short: "Cards", full: "Modern Cards", icon: "layout-grid" },
+      content: { short: "Content", full: "Glassmorphism Rows", icon: "file-text" }
+    };
     const titleGroup = header.createDiv({ cls: "graphway-node-title-group" });
     const titleRow = titleGroup.createDiv({ cls: "graphway-node-title-row" });
-    titleRow.createSpan({ text: isHomepage ? "\u{1F3E0} " : "\u{1F4C1} ", cls: "graphway-node-icon" });
-    titleRow.createSpan({ text: node.folderName, cls: "graphway-node-title" });
+    const nodeIcon = titleRow.createSpan({ cls: "graphway-node-icon" });
+    (0, import_obsidian7.setIcon)(nodeIcon, isHomepage ? "home" : "folder");
+    titleRow.createSpan({ text: cleanFolderName, cls: "graphway-node-title" });
     const indexFileName = node.indexFilePath ? node.indexFilePath.split("/").pop() : null;
     if (indexFileName) {
       const subTitle = titleGroup.createDiv({
-        cls: "graphway-node-index-subtitle",
-        text: `\u{1F4C4} ${indexFileName}`
+        cls: "graphway-node-index-subtitle"
       });
+      const subTitleIcon = subTitle.createSpan({ cls: "graphway-subtitle-icon" });
+      (0, import_obsidian7.setIcon)(subTitleIcon, "file-text");
+      subTitle.createSpan({ text: indexFileName });
       subTitle.title = `Index note: ${node.indexFilePath}
 Click to open
 Right-click for options`;
@@ -1525,6 +1608,11 @@ Right-click for options`;
             if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
           });
         });
+        menu.addItem((item) => {
+          item.setTitle(`View Layout: ${layoutLabels[effectiveLayout]?.full || "List"}${isCustomLayout ? " (Custom)" : " (Default)"}`).setIcon(layoutLabels[effectiveLayout]?.icon || "layout-grid").onClick(() => {
+            layoutBtn.click();
+          });
+        });
         if (this.settings.customFolderNotes && this.settings.customFolderNotes[node.folderPath]) {
           menu.addItem((item) => {
             item.setTitle("Unset Custom Index Assignment").setIcon("cross").onClick(async () => {
@@ -1536,9 +1624,11 @@ Right-click for options`;
       };
     } else {
       const noIndexBtn = titleGroup.createDiv({
-        cls: "graphway-node-no-index",
-        text: "\u26A0\uFE0F No index (Click to create)"
+        cls: "graphway-node-no-index"
       });
+      const noIndexIcon = noIndexBtn.createSpan({ cls: "graphway-no-index-icon" });
+      (0, import_obsidian7.setIcon)(noIndexIcon, "alert-circle");
+      noIndexBtn.createSpan({ text: "No index (Click to create)" });
       noIndexBtn.title = "Click to create folder index note";
       noIndexBtn.onclick = async (e) => {
         e.stopPropagation();
@@ -1553,10 +1643,9 @@ Right-click for options`;
       const renderBtn = headerActions.createSpan({
         cls: `graphway-file-toggle ${isFilesHidden ? "graphway-file-toggle-off" : "graphway-file-toggle-on"}`
       });
-      renderBtn.createSpan({ text: isFilesHidden ? "\u{1F6AB}" : "\u{1F441}\uFE0F", cls: "graphway-toggle-icon" });
-      renderBtn.createSpan({ text: isFilesHidden ? "Unrendered" : "Rendered", cls: "graphway-toggle-label" });
-      renderBtn.title = isFilesHidden ? `Direct files are UNRENDERED in "${node.folderName}" index note (GraphWay block removed if empty).
-Click to render files.` : `Direct files are RENDERED in "${node.folderName}" index note.
+      (0, import_obsidian7.setIcon)(renderBtn, isFilesHidden ? "eye-off" : "eye");
+      renderBtn.title = isFilesHidden ? `Direct files: UNRENDERED in "${cleanFolderName}" index note (GraphWay block removed if empty).
+Click to render files.` : `Direct files: RENDERED in "${cleanFolderName}" index note.
 Click to unrender direct files.`;
       renderBtn.onclick = async (e) => {
         e.stopPropagation();
@@ -1567,19 +1656,67 @@ Click to unrender direct files.`;
           this.settings.foldersHidingDirectFiles = this.settings.foldersHidingDirectFiles.filter(
             (p) => p !== node.folderPath
           );
-          new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+          new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
         } else {
           this.settings.foldersHidingDirectFiles.push(node.folderPath);
-          new import_obsidian7.Notice(`GraphWay: Direct files unrendered from "${node.folderName}" index note.`);
+          new import_obsidian7.Notice(`GraphWay: Direct files unrendered from "${cleanFolderName}" index note.`);
         }
         await this.onSettingsChange();
         await this.synchronizer.syncExistingIndices();
         this.render();
       };
     }
+    const layoutBtn = headerActions.createSpan({
+      cls: `graphway-layout-badge ${isCustomLayout ? "graphway-layout-badge-custom" : "graphway-layout-badge-default"}`
+    });
+    (0, import_obsidian7.setIcon)(layoutBtn, layoutLabels[effectiveLayout]?.icon || "layout-grid");
+    layoutBtn.title = isCustomLayout ? `View Layout: ${layoutLabels[effectiveLayout]?.full} (Folder specific override)
+Click to change or revert to Vault Default` : `View Layout: ${layoutLabels[effectiveLayout]?.full} (Vault Default)
+Click to choose a specific view for this folder`;
+    layoutBtn.onclick = (e) => {
+      e.stopPropagation();
+      const menu = new import_obsidian7.Menu();
+      const globalLayout = this.settings.renderViewLayout || "list";
+      const globalLabel = layoutLabels[globalLayout]?.full || "Classic List";
+      menu.addItem((item) => {
+        item.setTitle(`Vault Default (${globalLabel})`).setIcon("rotate-ccw").setChecked(!isCustomLayout).onClick(async () => {
+          if (this.settings.folderViewLayouts) {
+            delete this.settings.folderViewLayouts[node.folderPath];
+          }
+          await this.onSettingsChange();
+          await this.synchronizer.syncExistingIndices();
+          this.render();
+          new import_obsidian7.Notice(`GraphWay: "${cleanFolderName}" reverted to default layout (${globalLabel}).`);
+        });
+      });
+      menu.addSeparator();
+      const options = [
+        { layout: "list", name: "Classic List", icon: "list" },
+        { layout: "details", name: "Details Table", icon: "table" },
+        { layout: "inline", name: "Inline Pills", icon: "more-horizontal" },
+        { layout: "chips", name: "Neon Chips", icon: "tags" },
+        { layout: "cards", name: "Modern Cards", icon: "layout-grid" },
+        { layout: "content", name: "Glassmorphism Rows", icon: "file-text" }
+      ];
+      for (const opt of options) {
+        menu.addItem((item) => {
+          item.setTitle(opt.name).setIcon(opt.icon).setChecked(currentCustomLayout === opt.layout).onClick(async () => {
+            if (!this.settings.folderViewLayouts) {
+              this.settings.folderViewLayouts = {};
+            }
+            this.settings.folderViewLayouts[node.folderPath] = opt.layout;
+            await this.onSettingsChange();
+            await this.synchronizer.syncExistingIndices();
+            this.render();
+            new import_obsidian7.Notice(`GraphWay: Set "${cleanFolderName}" view to ${opt.name}.`);
+          });
+        });
+      }
+      menu.showAtMouseEvent(e);
+    };
     const badge = headerActions.createSpan({
       cls: `graphway-badge ${isHomepage ? "graphway-badge-homepage" : node.hasIndex ? "graphway-badge-ok" : "graphway-badge-warn"}`,
-      text: isHomepage ? "\u{1F3E0} HOMEPAGE" : node.hasIndex ? "INDEXED" : "NO INDEX"
+      text: isHomepage ? "HOMEPAGE" : node.hasIndex ? "INDEXED" : "NO INDEX"
     });
     badge.title = node.hasIndex ? `Click to un-index (detach index note and convert to normal note)` : "Click to create folder index note";
     badge.onclick = async (e) => {
@@ -1594,9 +1731,10 @@ Click to unrender direct files.`;
     const renderIndexedChildFolders = () => {
       for (const child of node.indexedChildFolders) {
         const itemRow = body.createDiv({ cls: "graphway-item-row graphway-child-folder-row" });
-        itemRow.createSpan({ text: "\u{1F4C1}", cls: "graphway-item-icon" });
+        const folderIcon = itemRow.createSpan({ cls: "graphway-item-icon" });
+        (0, import_obsidian7.setIcon)(folderIcon, "folder");
         const nameSpan = itemRow.createSpan({
-          text: child.folderName,
+          text: child.folderName.replace(/^[🏠📁📄\s]+/, ""),
           cls: "graphway-item-name graphway-child-folder-name"
         });
         nameSpan.title = `Child folder: ${child.folderPath}
@@ -1604,7 +1742,8 @@ Click to pan canvas to this folder`;
         nameSpan.onclick = () => {
           this.centerOnFolder(child.folderPath);
         };
-        const openBtn = itemRow.createSpan({ text: "\u{1F4C4}", cls: "graphway-mini-open" });
+        const openBtn = itemRow.createSpan({ cls: "graphway-mini-open" });
+        (0, import_obsidian7.setIcon)(openBtn, "file-text");
         openBtn.title = `Open index note: ${child.indexFilePath.split("/").pop()}`;
         openBtn.onclick = (e) => {
           e.stopPropagation();
@@ -1617,14 +1756,16 @@ Click to pan canvas to this folder`;
       const renderTreeInCard = (tree, container, indent) => {
         const fRow = container.createDiv({ cls: "graphway-item-row" });
         fRow.style.paddingLeft = `${4 + indent * 10}px`;
-        fRow.createSpan({ text: "\u{1F4C1}", cls: "graphway-item-icon" });
-        fRow.createSpan({ text: tree.folderName, cls: "graphway-item-name graphway-unindexed-name" });
+        const fIcon = fRow.createSpan({ cls: "graphway-item-icon" });
+        (0, import_obsidian7.setIcon)(fIcon, "folder");
+        fRow.createSpan({ text: tree.folderName.replace(/^[🏠📁📄\s]+/, ""), cls: "graphway-item-name graphway-unindexed-name" });
         for (const filePath of tree.files) {
           const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
           const itemRow = container.createDiv({ cls: "graphway-item-row" });
           itemRow.setAttribute("data-filepath", filePath);
           itemRow.style.paddingLeft = `${14 + indent * 10}px`;
-          itemRow.createSpan({ text: "\u21B3 \u{1F4C4}", cls: "graphway-item-icon" });
+          const fileIcon = itemRow.createSpan({ cls: "graphway-item-icon" });
+          (0, import_obsidian7.setIcon)(fileIcon, "file-text");
           const nameSpan = itemRow.createSpan({ text: fileName, cls: "graphway-item-name" });
           nameSpan.onclick = () => {
             const f = this.app.vault.getAbstractFileByPath(filePath);
@@ -1677,7 +1818,8 @@ Click to pan canvas to this folder`;
       if (isFilesHidden) {
         if (node.directFiles.length > 0) {
           const itemRow = body.createDiv({ cls: "graphway-item-row graphway-files-hidden-row" });
-          itemRow.createSpan({ text: "\u{1F6AB}", cls: "graphway-item-icon" });
+          const eyeOffIcon = itemRow.createSpan({ cls: "graphway-item-icon" });
+          (0, import_obsidian7.setIcon)(eyeOffIcon, "eye-off");
           const nameSpan = itemRow.createSpan({
             text: `${node.directFiles.length} direct file(s) unrendered`,
             cls: "graphway-item-name graphway-files-hidden-label"
@@ -1688,7 +1830,7 @@ Click to pan canvas to this folder`;
               (p) => p !== node.folderPath
             );
             await this.onSettingsChange();
-            new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+            new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
             await this.synchronizer.syncExistingIndices();
             this.render();
           };
@@ -1699,7 +1841,8 @@ Click to pan canvas to this folder`;
         const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
         const itemRow = body.createDiv({ cls: "graphway-item-row" });
         itemRow.setAttribute("data-filepath", filePath);
-        itemRow.createSpan({ text: "\u{1F4C4}", cls: "graphway-item-icon" });
+        const fileIcon = itemRow.createSpan({ cls: "graphway-item-icon" });
+        (0, import_obsidian7.setIcon)(fileIcon, "file-text");
         const nameSpan = itemRow.createSpan({ text: fileName, cls: "graphway-item-name" });
         nameSpan.onclick = () => {
           const f = this.app.vault.getAbstractFileByPath(filePath);
@@ -1748,19 +1891,21 @@ Click to pan canvas to this folder`;
           const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
           const itemRow = body.createDiv({ cls: "graphway-item-row graphway-custom-override-row" });
           itemRow.setAttribute("data-filepath", filePath);
-          itemRow.createSpan({ text: "\u{1F517} \u{1F4C4}", cls: "graphway-item-icon" });
+          const linkIcon = itemRow.createSpan({ cls: "graphway-item-icon" });
+          (0, import_obsidian7.setIcon)(linkIcon, "link");
           const nameSpan = itemRow.createSpan({
             text: `${fileName} (Custom Link)`,
             cls: "graphway-item-name graphway-custom-override-name"
           });
           nameSpan.title = `External linked file: ${filePath}
 Click to open
-Click \u2715 to remove link`;
+Click to remove link`;
           nameSpan.onclick = () => {
             const f = this.app.vault.getAbstractFileByPath(filePath);
             if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
           };
-          const removeBtn = itemRow.createSpan({ text: "\u2715", cls: "graphway-mini-remove" });
+          const removeBtn = itemRow.createSpan({ cls: "graphway-mini-remove" });
+          (0, import_obsidian7.setIcon)(removeBtn, "x");
           removeBtn.title = "Remove custom link";
           removeBtn.onclick = async (e) => {
             e.stopPropagation();
@@ -2062,7 +2207,7 @@ Click wire to disconnect`;
         }
         const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
         this.updateData(hierarchy);
-        this.app.workspace.getLeaf().openFile(newFile);
+        new import_obsidian7.Notice(`GraphWay: Created index note "${newFile.basename}" for "${node.folderName}".`);
       }
     }
   }
@@ -2168,6 +2313,12 @@ var GraphWayView = class extends import_obsidian8.ItemView {
   async onOpen() {
     const container = this.contentEl;
     container.empty();
+    this.addAction("refresh-cw", "Refresh Canvas", async () => {
+      if (this.renderer) {
+        await this.renderer.refresh();
+        new import_obsidian8.Notice("GraphWay: Canvas refreshed.");
+      }
+    });
     this.renderer = new CanvasRenderer(
       container,
       this.app,
@@ -2324,6 +2475,9 @@ var GraphWayPlugin = class extends import_obsidian9.Plugin {
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    if (!this.settings.folderViewLayouts) {
+      this.settings.folderViewLayouts = {};
+    }
   }
   async saveSettings() {
     await this.saveData(this.settings);
