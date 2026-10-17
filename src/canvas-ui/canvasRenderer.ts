@@ -685,7 +685,7 @@ export class CanvasRenderer {
             const menu = new Menu();
             menu.addItem((item) => {
               item
-                .setTitle(`⭐ Make "${fileName}" the Index Note for "${tree.folderName}"`)
+                .setTitle(`Make "${fileName}" the Index Note for "${tree.folderName}"`)
                 .setIcon('star')
                 .onClick(async () => {
                   await this.setFileAsFolderIndex(tree.folderPath, filePath);
@@ -777,7 +777,7 @@ export class CanvasRenderer {
           const menu = new Menu();
           menu.addItem((item) => {
             item
-              .setTitle(`⭐ Make "${fileName}" the Folder Index Note`)
+              .setTitle(`Make "${fileName}" the Folder Index Note`)
               .setIcon('star')
               .onClick(async () => {
                 await this.setFileAsFolderIndex(node.folderPath, filePath);

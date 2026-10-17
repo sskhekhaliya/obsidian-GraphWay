@@ -1472,7 +1472,7 @@ Click to pan canvas to this folder`;
             e.stopPropagation();
             const menu = new import_obsidian7.Menu();
             menu.addItem((item) => {
-              item.setTitle(`\u2B50 Make "${fileName}" the Index Note for "${tree.folderName}"`).setIcon("star").onClick(async () => {
+              item.setTitle(`Make "${fileName}" the Index Note for "${tree.folderName}"`).setIcon("star").onClick(async () => {
                 await this.setFileAsFolderIndex(tree.folderPath, filePath);
               });
             });
@@ -1547,7 +1547,7 @@ Click to pan canvas to this folder`;
           e.stopPropagation();
           const menu = new import_obsidian7.Menu();
           menu.addItem((item) => {
-            item.setTitle(`\u2B50 Make "${fileName}" the Folder Index Note`).setIcon("star").onClick(async () => {
+            item.setTitle(`Make "${fileName}" the Folder Index Note`).setIcon("star").onClick(async () => {
               await this.setFileAsFolderIndex(node.folderPath, filePath);
             });
           });
