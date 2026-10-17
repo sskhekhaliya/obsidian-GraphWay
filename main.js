@@ -582,6 +582,9 @@ var VaultSynchronizer = class {
   getHierarchyBuilder() {
     return this.hierarchyBuilder;
   }
+  getMarkdownGenerator() {
+    return this.generator;
+  }
   registerHierarchyCallback(cb) {
     this.onHierarchyUpdatedCallbacks.push(cb);
   }
@@ -1878,10 +1881,25 @@ Click wire to disconnect`;
     new import_obsidian7.Notice(`GraphWay: Un-indexed "${node.folderName}". Converted index to normal note.`);
   }
   /**
-   * Assigns a specific file as the custom index note for a folder
+   * Assigns a specific file as the custom index note for a folder,
+   * removing the rendered GraphWay block from any previous index note.
    */
   async setFileAsFolderIndex(folderPath, filePath) {
     const isRoot = folderPath === "/" || folderPath === "";
+    const currentHierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    const existingNode = currentHierarchy.get(folderPath);
+    let previousIndexFilePath = null;
+    if (existingNode && existingNode.indexFilePath && existingNode.indexFilePath !== filePath) {
+      previousIndexFilePath = existingNode.indexFilePath;
+    } else if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath] && this.settings.customFolderNotes[folderPath] !== filePath) {
+      previousIndexFilePath = this.settings.customFolderNotes[folderPath];
+    }
+    if (previousIndexFilePath) {
+      const prevFile = this.app.vault.getAbstractFileByPath(previousIndexFilePath);
+      if (prevFile instanceof import_obsidian7.TFile) {
+        await this.synchronizer.getMarkdownGenerator().removeBlockFromFile(prevFile);
+      }
+    }
     if (this.settings.unindexedFolderPaths) {
       this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
         (p) => p !== folderPath && (!isRoot || p !== "/" && p !== "")
@@ -1911,12 +1929,17 @@ Click wire to disconnect`;
     }
   }
   /**
-   * Unsets any custom index note assigned to this folder
+   * Unsets any custom index note assigned to this folder, removing rendered block from the custom note
    */
   async unsetFolderIndex(folderPath) {
     if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath]) {
+      const prevCustomPath = this.settings.customFolderNotes[folderPath];
       delete this.settings.customFolderNotes[folderPath];
       await this.onSettingsChange();
+      const prevFile = this.app.vault.getAbstractFileByPath(prevCustomPath);
+      if (prevFile instanceof import_obsidian7.TFile) {
+        await this.synchronizer.getMarkdownGenerator().removeBlockFromFile(prevFile);
+      }
       await this.synchronizer.syncExistingIndices();
       new import_obsidian7.Notice("GraphWay: Unset custom index note assignment.");
       const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();

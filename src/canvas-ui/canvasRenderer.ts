@@ -1191,10 +1191,34 @@ export class CanvasRenderer {
   }
 
   /**
-   * Assigns a specific file as the custom index note for a folder
+   * Assigns a specific file as the custom index note for a folder,
+   * removing the rendered GraphWay block from any previous index note.
    */
   private async setFileAsFolderIndex(folderPath: string, filePath: string): Promise<void> {
     const isRoot = folderPath === '/' || folderPath === '';
+
+    // 1. Identify and clean previous index note for this folder before reassigning
+    const currentHierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    const existingNode = currentHierarchy.get(folderPath);
+    let previousIndexFilePath: string | null = null;
+
+    if (existingNode && existingNode.indexFilePath && existingNode.indexFilePath !== filePath) {
+      previousIndexFilePath = existingNode.indexFilePath;
+    } else if (
+      this.settings.customFolderNotes &&
+      this.settings.customFolderNotes[folderPath] &&
+      this.settings.customFolderNotes[folderPath] !== filePath
+    ) {
+      previousIndexFilePath = this.settings.customFolderNotes[folderPath];
+    }
+
+    if (previousIndexFilePath) {
+      const prevFile = this.app.vault.getAbstractFileByPath(previousIndexFilePath);
+      if (prevFile instanceof TFile) {
+        await this.synchronizer.getMarkdownGenerator().removeBlockFromFile(prevFile);
+      }
+    }
+
     if (this.settings.unindexedFolderPaths) {
       this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(
         p => p !== folderPath && (!isRoot || (p !== '/' && p !== ''))
@@ -1229,12 +1253,19 @@ export class CanvasRenderer {
   }
 
   /**
-   * Unsets any custom index note assigned to this folder
+   * Unsets any custom index note assigned to this folder, removing rendered block from the custom note
    */
   private async unsetFolderIndex(folderPath: string): Promise<void> {
     if (this.settings.customFolderNotes && this.settings.customFolderNotes[folderPath]) {
+      const prevCustomPath = this.settings.customFolderNotes[folderPath];
       delete this.settings.customFolderNotes[folderPath];
       await this.onSettingsChange();
+
+      const prevFile = this.app.vault.getAbstractFileByPath(prevCustomPath);
+      if (prevFile instanceof TFile) {
+        await this.synchronizer.getMarkdownGenerator().removeBlockFromFile(prevFile);
+      }
+
       await this.synchronizer.syncExistingIndices();
       new Notice('GraphWay: Unset custom index note assignment.');
       const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();

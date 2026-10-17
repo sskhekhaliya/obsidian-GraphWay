@@ -40,6 +40,10 @@ export class VaultSynchronizer {
     return this.hierarchyBuilder;
   }
 
+  public getMarkdownGenerator(): MarkdownGenerator {
+    return this.generator;
+  }
+
   public registerHierarchyCallback(cb: (hierarchy: ReturnType<HierarchyBuilder['buildVaultHierarchy']>) => void): void {
     this.onHierarchyUpdatedCallbacks.push(cb);
   }
