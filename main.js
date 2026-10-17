@@ -46,7 +46,6 @@ var DEFAULT_SETTINGS = {
   customFolderEdges: [],
   folderToFileConnections: [],
   customLinkOverrides: {},
-  unindexedFolderPaths: [],
   nodePositions: {}
 };
 
@@ -122,9 +121,6 @@ var FolderResolver = class _FolderResolver {
    * Finds the folder note for a given TFolder, if one exists.
    */
   findFolderNote(folder) {
-    if (this.settings.unindexedFolderPaths && this.settings.unindexedFolderPaths.includes(folder.path)) {
-      return null;
-    }
     if (this.settings.folderNoteInsideFolder) {
       for (const child of folder.children) {
         if (child instanceof import_obsidian.TFile && this.isFolderNoteFor(child, folder)) {
@@ -503,38 +499,6 @@ ${currentContent}`;
     }
     return false;
   }
-  /**
-   * Removes the GraphWay block from a note (used when making a folder note a normal file)
-   */
-  async removeBlockFromFile(file) {
-    const currentContent = await this.app.vault.read(file);
-    const beginMarker = this.settings.beginMarker;
-    const endMarker = this.settings.endMarker;
-    const startIndex = currentContent.indexOf(beginMarker);
-    const endIndex = currentContent.indexOf(endMarker);
-    if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
-      const before = currentContent.substring(0, startIndex);
-      const after = currentContent.substring(endIndex + endMarker.length);
-      const cleanBefore = before.replace(/\r?\n\s*$/, "");
-      const cleanAfter = after.replace(/^\s*\r?\n/, "");
-      let updatedContent = "";
-      if (cleanBefore && cleanAfter) {
-        updatedContent = `${cleanBefore}
-
-${cleanAfter}
-`;
-      } else if (cleanBefore) {
-        updatedContent = `${cleanBefore}
-`;
-      } else if (cleanAfter) {
-        updatedContent = `${cleanAfter}
-`;
-      }
-      await this.app.vault.modify(file, updatedContent);
-      return true;
-    }
-    return false;
-  }
 };
 
 // src/core/vaultSynchronizer.ts
@@ -660,9 +624,6 @@ var VaultSynchronizer = class {
    * Explicitly creates a missing folder note for a folder, populates it, and syncs
    */
   async createFolderNoteForFolder(folder) {
-    if (this.settings.unindexedFolderPaths) {
-      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter((p) => p !== folder.path);
-    }
     const isRoot = folder.path === "/" || folder.isRoot();
     let targetPath = "";
     if (isRoot) {
@@ -690,35 +651,6 @@ var VaultSynchronizer = class {
       return file;
     }
     return null;
-  }
-  /**
-   * Detaches a folder note, making it a normal file instead of an automated index note
-   */
-  async detachFolderNote(folderPath, indexFilePath) {
-    let noteFile = null;
-    if (indexFilePath) {
-      const f = this.app.vault.getAbstractFileByPath(indexFilePath);
-      if (f instanceof import_obsidian4.TFile) noteFile = f;
-    } else {
-      const abstractFolder = this.app.vault.getAbstractFileByPath(folderPath);
-      if (abstractFolder instanceof import_obsidian4.TFolder) {
-        noteFile = this.resolver.findFolderNote(abstractFolder);
-      }
-    }
-    if (noteFile) {
-      await this.generator.removeBlockFromFile(noteFile);
-    }
-    if ((folderPath === "/" || folderPath === "") && this.settings.homepageNotePath) {
-      this.settings.homepageNotePath = "";
-    }
-    if (!this.settings.unindexedFolderPaths) {
-      this.settings.unindexedFolderPaths = [];
-    }
-    if (!this.settings.unindexedFolderPaths.includes(folderPath)) {
-      this.settings.unindexedFolderPaths.push(folderPath);
-    }
-    await this.syncExistingIndices();
-    return true;
   }
   /**
    * Updates only a specific folder note
@@ -1336,15 +1268,11 @@ Click to open`;
       cls: `graphway-badge ${isHomepage ? "graphway-badge-homepage" : node.hasIndex ? "graphway-badge-ok" : "graphway-badge-warn"}`,
       text: isHomepage ? "\u{1F3E0} HOMEPAGE" : node.hasIndex ? "INDEXED" : "NO INDEX"
     });
-    badge.title = node.hasIndex ? `Index note: ${node.indexFilePath}
-Click to convert into a normal file (unindex folder)` : "Click to create/assign folder index note";
+    badge.title = node.hasIndex ? `Folder Note: ${node.indexFilePath}
+Click to open` : "Click to create folder index note";
     badge.onclick = async (e) => {
       e.stopPropagation();
-      if (node.hasIndex) {
-        await this.handleDetachIndex(node);
-      } else {
-        await this.handleCreateOrOpenIndex(node);
-      }
+      await this.handleCreateOrOpenIndex(node);
     };
     const body = card.createDiv({ cls: "graphway-node-body" });
     const renderIndexedChildFolders = () => {
@@ -1695,10 +1623,6 @@ Click wire to disconnect`;
    * Opens the index note if it exists, or creates it if missing
    */
   async handleCreateOrOpenIndex(node) {
-    if (this.settings.unindexedFolderPaths && this.settings.unindexedFolderPaths.includes(node.folderPath)) {
-      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter((p) => p !== node.folderPath);
-      await this.onSettingsChange();
-    }
     if (node.hasIndex && node.indexFilePath) {
       const file = this.app.vault.getAbstractFileByPath(node.indexFilePath);
       if (file instanceof import_obsidian7.TFile) {
@@ -1727,17 +1651,6 @@ Click wire to disconnect`;
         this.app.workspace.getLeaf().openFile(newFile);
       }
     }
-  }
-  /**
-   * Converts an indexed folder note into a normal file, unindexing the folder
-   */
-  async handleDetachIndex(node) {
-    const fileName = node.indexFilePath ? node.indexFilePath.split("/").pop() : "index note";
-    await this.synchronizer.detachFolderNote(node.folderPath, node.indexFilePath);
-    await this.onSettingsChange();
-    new import_obsidian7.Notice(`GraphWay: Converted "${fileName}" to a normal file. Folder is now unindexed.`);
-    const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
-    this.updateData(hierarchy);
   }
 };
 

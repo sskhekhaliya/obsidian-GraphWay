@@ -163,11 +163,6 @@ export class VaultSynchronizer {
    * Explicitly creates a missing folder note for a folder, populates it, and syncs
    */
   public async createFolderNoteForFolder(folder: TFolder): Promise<TFile | null> {
-    // If the folder was previously marked as unindexed, re-enable it
-    if (this.settings.unindexedFolderPaths) {
-      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(p => p !== folder.path);
-    }
-
     const isRoot = folder.path === '/' || folder.isRoot();
     let targetPath = '';
 
@@ -203,41 +198,6 @@ export class VaultSynchronizer {
 
     return null;
   }
-
-  /**
-   * Detaches a folder note, making it a normal file instead of an automated index note
-   */
-  public async detachFolderNote(folderPath: string, indexFilePath?: string | null): Promise<boolean> {
-    let noteFile: TFile | null = null;
-    if (indexFilePath) {
-      const f = this.app.vault.getAbstractFileByPath(indexFilePath);
-      if (f instanceof TFile) noteFile = f;
-    } else {
-      const abstractFolder = this.app.vault.getAbstractFileByPath(folderPath);
-      if (abstractFolder instanceof TFolder) {
-        noteFile = this.resolver.findFolderNote(abstractFolder);
-      }
-    }
-
-    if (noteFile) {
-      await this.generator.removeBlockFromFile(noteFile);
-    }
-
-    if ((folderPath === '/' || folderPath === '') && this.settings.homepageNotePath) {
-      this.settings.homepageNotePath = '';
-    }
-
-    if (!this.settings.unindexedFolderPaths) {
-      this.settings.unindexedFolderPaths = [];
-    }
-    if (!this.settings.unindexedFolderPaths.includes(folderPath)) {
-      this.settings.unindexedFolderPaths.push(folderPath);
-    }
-
-    await this.syncExistingIndices();
-    return true;
-  }
-
 
   /**
    * Updates only a specific folder note

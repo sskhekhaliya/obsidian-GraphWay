@@ -176,40 +176,4 @@ export class MarkdownGenerator {
 
     return false;
   }
-
-  /**
-   * Removes the GraphWay block from a note (used when making a folder note a normal file)
-   */
-  public async removeBlockFromFile(file: TFile): Promise<boolean> {
-    const currentContent = await this.app.vault.read(file);
-    const beginMarker = this.settings.beginMarker;
-    const endMarker = this.settings.endMarker;
-
-    const startIndex = currentContent.indexOf(beginMarker);
-    const endIndex = currentContent.indexOf(endMarker);
-
-    if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
-      const before = currentContent.substring(0, startIndex);
-      const after = currentContent.substring(endIndex + endMarker.length);
-
-      // Clean up surrounding extra empty lines
-      const cleanBefore = before.replace(/\r?\n\s*$/, '');
-      const cleanAfter = after.replace(/^\s*\r?\n/, '');
-
-      let updatedContent = '';
-      if (cleanBefore && cleanAfter) {
-        updatedContent = `${cleanBefore}\n\n${cleanAfter}\n`;
-      } else if (cleanBefore) {
-        updatedContent = `${cleanBefore}\n`;
-      } else if (cleanAfter) {
-        updatedContent = `${cleanAfter}\n`;
-      }
-
-      await this.app.vault.modify(file, updatedContent);
-      return true;
-    }
-
-    return false;
-  }
 }
-

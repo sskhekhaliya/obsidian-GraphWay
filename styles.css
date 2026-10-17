@@ -349,14 +349,6 @@
   background: rgba(16, 185, 129, 0.18);
   color: #10b981;
   border: 1px solid rgba(16, 185, 129, 0.35);
-  transition: all 0.15s ease;
-}
-
-.graphway-badge-ok:hover {
-  background: rgba(239, 68, 68, 0.22);
-  color: #f87171;
-  border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.25);
 }
 
 .graphway-badge-warn {
