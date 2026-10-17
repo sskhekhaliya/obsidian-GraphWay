@@ -545,7 +545,45 @@ export class CanvasRenderer {
       };
     }
 
-    const badge = header.createSpan({
+    const isFilesHidden = Boolean(
+      this.settings.foldersHidingDirectFiles &&
+      this.settings.foldersHidingDirectFiles.includes(node.folderPath)
+    );
+
+    const headerActions = header.createDiv({ cls: 'graphway-node-header-actions' });
+
+    // File visibility toggle button (to include or exclude direct files in this folder's index note)
+    if (node.hasIndex || node.directFiles.length > 0) {
+      const eyeBtn = headerActions.createSpan({
+        cls: `graphway-file-toggle ${isFilesHidden ? 'graphway-file-toggle-off' : 'graphway-file-toggle-on'}`
+      });
+      eyeBtn.createSpan({ text: isFilesHidden ? '🚫' : '👁️', cls: 'graphway-toggle-icon' });
+      eyeBtn.createSpan({ text: 'Files', cls: 'graphway-toggle-label' });
+      eyeBtn.title = isFilesHidden
+        ? `Direct files are HIDDEN in "${node.folderName}" index note.\nClick to render files inside index note.`
+        : `Direct files are RENDERED in "${node.folderName}" index note.\nClick to hide files from index note.`;
+
+      eyeBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (!this.settings.foldersHidingDirectFiles) {
+          this.settings.foldersHidingDirectFiles = [];
+        }
+        if (isFilesHidden) {
+          this.settings.foldersHidingDirectFiles = this.settings.foldersHidingDirectFiles.filter(
+            p => p !== node.folderPath
+          );
+          new Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+        } else {
+          this.settings.foldersHidingDirectFiles.push(node.folderPath);
+          new Notice(`GraphWay: Direct files hidden from "${node.folderName}" index note.`);
+        }
+        await this.onSettingsChange();
+        await this.synchronizer.syncExistingIndices();
+        this.render();
+      };
+    }
+
+    const badge = headerActions.createSpan({
       cls: `graphway-badge ${
         isHomepage
           ? 'graphway-badge-homepage'
@@ -563,6 +601,7 @@ export class CanvasRenderer {
       e.stopPropagation();
       await this.handleCreateOrOpenIndex(node);
     };
+
 
     // 3. Node Body (Files and Links list - mirrors exactly what is generated in %% Begin GraphWay %%)
     const body = card.createDiv({ cls: 'graphway-node-body' });
@@ -645,6 +684,28 @@ export class CanvasRenderer {
 
     // Helper: render direct markdown files
     const renderDirectFiles = () => {
+      if (isFilesHidden) {
+        if (node.directFiles.length > 0) {
+          const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-files-hidden-row' });
+          itemRow.createSpan({ text: '🚫', cls: 'graphway-item-icon' });
+          const nameSpan = itemRow.createSpan({
+            text: `${node.directFiles.length} direct file(s) hidden from index`,
+            cls: 'graphway-item-name graphway-files-hidden-label'
+          });
+          nameSpan.title = 'Click to show direct files in index note';
+          nameSpan.onclick = async () => {
+            this.settings.foldersHidingDirectFiles = (this.settings.foldersHidingDirectFiles || []).filter(
+              p => p !== node.folderPath
+            );
+            await this.onSettingsChange();
+            new Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+            await this.synchronizer.syncExistingIndices();
+            this.render();
+          };
+        }
+        return;
+      }
+
       for (const filePath of node.directFiles) {
         const fileName = filePath.split('/').pop()?.replace(/\.md$/, '') || filePath;
         const itemRow = body.createDiv({ cls: 'graphway-item-row' });

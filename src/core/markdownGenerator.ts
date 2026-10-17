@@ -62,29 +62,35 @@ export class MarkdownGenerator {
       }
     }
 
-    // 2. Gather direct file links
+    // 2. Gather direct file links (unless direct files are hidden for this folder's index note)
     const fileLinks: { name: string; link: string }[] = [];
-    for (const filePath of node.directFiles) {
-      // Check if this file has a custom override pointing to another folder
-      const overrideTarget = this.settings.customLinkOverrides[filePath];
-      if (overrideTarget && overrideTarget !== node.folderPath) {
-        continue; // routed elsewhere
-      }
+    const isFilesHidden =
+      this.settings.foldersHidingDirectFiles &&
+      this.settings.foldersHidingDirectFiles.includes(node.folderPath);
 
-      const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (file instanceof TFile) {
-        const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
-        fileLinks.push({ name: file.basename, link });
-      }
-    }
+    if (!isFilesHidden) {
+      for (const filePath of node.directFiles) {
+        // Check if this file has a custom override pointing to another folder
+        const overrideTarget = this.settings.customLinkOverrides[filePath];
+        if (overrideTarget && overrideTarget !== node.folderPath) {
+          continue; // routed elsewhere
+        }
 
-    // Check if any external files have a custom override pointing to THIS folder
-    for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
-      if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
           const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
           fileLinks.push({ name: file.basename, link });
+        }
+      }
+
+      // Check if any external files have a custom override pointing to THIS folder
+      for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
+        if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
+          const file = this.app.vault.getAbstractFileByPath(filePath);
+          if (file instanceof TFile) {
+            const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
+            fileLinks.push({ name: file.basename, link });
+          }
         }
       }
     }

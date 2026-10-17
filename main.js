@@ -46,6 +46,7 @@ var DEFAULT_SETTINGS = {
   customFolderEdges: [],
   folderToFileConnections: [],
   customLinkOverrides: {},
+  foldersHidingDirectFiles: [],
   nodePositions: {}
 };
 
@@ -402,23 +403,26 @@ var MarkdownGenerator = class {
       }
     }
     const fileLinks = [];
-    for (const filePath of node.directFiles) {
-      const overrideTarget = this.settings.customLinkOverrides[filePath];
-      if (overrideTarget && overrideTarget !== node.folderPath) {
-        continue;
-      }
-      const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (file instanceof import_obsidian3.TFile) {
-        const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
-        fileLinks.push({ name: file.basename, link });
-      }
-    }
-    for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
-      if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
+    const isFilesHidden = this.settings.foldersHidingDirectFiles && this.settings.foldersHidingDirectFiles.includes(node.folderPath);
+    if (!isFilesHidden) {
+      for (const filePath of node.directFiles) {
+        const overrideTarget = this.settings.customLinkOverrides[filePath];
+        if (overrideTarget && overrideTarget !== node.folderPath) {
+          continue;
+        }
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof import_obsidian3.TFile) {
           const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
           fileLinks.push({ name: file.basename, link });
+        }
+      }
+      for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
+        if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
+          const file = this.app.vault.getAbstractFileByPath(filePath);
+          if (file instanceof import_obsidian3.TFile) {
+            const link = this.app.fileManager.generateMarkdownLink(file, node.folderPath);
+            fileLinks.push({ name: file.basename, link });
+          }
         }
       }
     }
@@ -1264,7 +1268,39 @@ Click to open`;
         await this.handleCreateOrOpenIndex(node);
       };
     }
-    const badge = header.createSpan({
+    const isFilesHidden = Boolean(
+      this.settings.foldersHidingDirectFiles && this.settings.foldersHidingDirectFiles.includes(node.folderPath)
+    );
+    const headerActions = header.createDiv({ cls: "graphway-node-header-actions" });
+    if (node.hasIndex || node.directFiles.length > 0) {
+      const eyeBtn = headerActions.createSpan({
+        cls: `graphway-file-toggle ${isFilesHidden ? "graphway-file-toggle-off" : "graphway-file-toggle-on"}`
+      });
+      eyeBtn.createSpan({ text: isFilesHidden ? "\u{1F6AB}" : "\u{1F441}\uFE0F", cls: "graphway-toggle-icon" });
+      eyeBtn.createSpan({ text: "Files", cls: "graphway-toggle-label" });
+      eyeBtn.title = isFilesHidden ? `Direct files are HIDDEN in "${node.folderName}" index note.
+Click to render files inside index note.` : `Direct files are RENDERED in "${node.folderName}" index note.
+Click to hide files from index note.`;
+      eyeBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (!this.settings.foldersHidingDirectFiles) {
+          this.settings.foldersHidingDirectFiles = [];
+        }
+        if (isFilesHidden) {
+          this.settings.foldersHidingDirectFiles = this.settings.foldersHidingDirectFiles.filter(
+            (p) => p !== node.folderPath
+          );
+          new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+        } else {
+          this.settings.foldersHidingDirectFiles.push(node.folderPath);
+          new import_obsidian7.Notice(`GraphWay: Direct files hidden from "${node.folderName}" index note.`);
+        }
+        await this.onSettingsChange();
+        await this.synchronizer.syncExistingIndices();
+        this.render();
+      };
+    }
+    const badge = headerActions.createSpan({
       cls: `graphway-badge ${isHomepage ? "graphway-badge-homepage" : node.hasIndex ? "graphway-badge-ok" : "graphway-badge-warn"}`,
       text: isHomepage ? "\u{1F3E0} HOMEPAGE" : node.hasIndex ? "INDEXED" : "NO INDEX"
     });
@@ -1341,6 +1377,27 @@ Click to pan canvas to this folder`;
       }
     };
     const renderDirectFiles = () => {
+      if (isFilesHidden) {
+        if (node.directFiles.length > 0) {
+          const itemRow = body.createDiv({ cls: "graphway-item-row graphway-files-hidden-row" });
+          itemRow.createSpan({ text: "\u{1F6AB}", cls: "graphway-item-icon" });
+          const nameSpan = itemRow.createSpan({
+            text: `${node.directFiles.length} direct file(s) hidden from index`,
+            cls: "graphway-item-name graphway-files-hidden-label"
+          });
+          nameSpan.title = "Click to show direct files in index note";
+          nameSpan.onclick = async () => {
+            this.settings.foldersHidingDirectFiles = (this.settings.foldersHidingDirectFiles || []).filter(
+              (p) => p !== node.folderPath
+            );
+            await this.onSettingsChange();
+            new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${node.folderName}" index note.`);
+            await this.synchronizer.syncExistingIndices();
+            this.render();
+          };
+        }
+        return;
+      }
       for (const filePath of node.directFiles) {
         const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
         const itemRow = body.createDiv({ cls: "graphway-item-row" });

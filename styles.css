@@ -256,7 +256,9 @@
   flex-direction: column;
   gap: 2px;
   overflow: hidden;
-  max-width: 175px;
+  flex: 1;
+  min-width: 0;
+  margin-right: 6px;
 }
 
 .graphway-node-title-row {
@@ -333,6 +335,67 @@
 .graphway-mini-open:hover {
   opacity: 1;
   transform: scale(1.2);
+}
+
+.graphway-node-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.graphway-file-toggle {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.graphway-file-toggle:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.graphway-file-toggle-on {
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.graphway-file-toggle-on:hover {
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+}
+
+.graphway-file-toggle-off {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.graphway-file-toggle-off:hover {
+  background: rgba(239, 68, 68, 0.22);
+}
+
+.graphway-files-hidden-row {
+  opacity: 0.75;
+  font-style: italic;
+  font-size: 11px;
+  background: rgba(239, 68, 68, 0.05);
+  border-left: 2px dashed rgba(239, 68, 68, 0.4);
+}
+
+.graphway-files-hidden-label {
+  color: #f87171;
 }
 
 .graphway-badge {
