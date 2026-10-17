@@ -108,11 +108,13 @@ export class VaultSynchronizer {
           if (!existingNote) {
             const targetPath = normalizePath(this.resolver.computeDefaultFolderNotePath(folder));
             const existingFile = this.app.vault.getAbstractFileByPath(targetPath);
-            if (!existingFile) {
-              const template = this.settings.defaultTemplate.replace(/\{\{title\}\}/g, folder.name);
+              let template = this.settings.defaultTemplate || '%% Begin GraphWay %%\n%% End GraphWay %%\n';
+              template = template.replace(/^#+\s*\{\{title\}\}\r?\n+/i, '').replace(/\{\{title\}\}/g, folder.name);
+              if (!template.trim()) {
+                template = '%% Begin GraphWay %%\n%% End GraphWay %%\n';
+              }
               await this.app.vault.create(targetPath, template);
               createdCount++;
-            }
           }
         }
       }
@@ -193,7 +195,11 @@ export class VaultSynchronizer {
       const title =
         folder.name ||
         (this.settings.homepageNotePath ? this.settings.homepageNotePath.replace(/\.md$/, '') : 'Homepage');
-      const template = this.settings.defaultTemplate.replace(/\{\{title\}\}/g, title);
+      let template = this.settings.defaultTemplate || '%% Begin GraphWay %%\n%% End GraphWay %%\n';
+      template = template.replace(/^#+\s*\{\{title\}\}\r?\n+/i, '').replace(/\{\{title\}\}/g, title);
+      if (!template.trim()) {
+        template = '%% Begin GraphWay %%\n%% End GraphWay %%\n';
+      }
       try {
         file = await this.app.vault.create(targetPath, template);
         new Notice(`GraphWay: Created index note "${(file as TFile).name}"`);

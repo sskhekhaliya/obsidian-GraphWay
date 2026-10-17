@@ -818,25 +818,64 @@ export class CanvasRenderer {
       }
     };
 
+    // Helper: render custom overridden external files linked to this folder
+    const renderCustomOverrideFiles = () => {
+      if (!this.settings.customLinkOverrides) return;
+      for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
+        if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
+          const fileName = filePath.split('/').pop()?.replace(/\.md$/, '') || filePath;
+          const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-custom-override-row' });
+          itemRow.setAttribute('data-filepath', filePath);
+          itemRow.createSpan({ text: '🔗 📄', cls: 'graphway-item-icon' });
+          const nameSpan = itemRow.createSpan({
+            text: `${fileName} (Custom Link)`,
+            cls: 'graphway-item-name graphway-custom-override-name'
+          });
+          nameSpan.title = `External linked file: ${filePath}\nClick to open\nClick ✕ to remove link`;
+          nameSpan.onclick = () => {
+            const f = this.app.vault.getAbstractFileByPath(filePath);
+            if (f instanceof TFile) this.app.workspace.getLeaf().openFile(f);
+          };
+
+          const removeBtn = itemRow.createSpan({ text: '✕', cls: 'graphway-mini-remove' });
+          removeBtn.title = 'Remove custom link';
+          removeBtn.onclick = async (e) => {
+            e.stopPropagation();
+            delete this.settings.customLinkOverrides[filePath];
+            await this.onSettingsChange();
+            await this.synchronizer.syncExistingIndices();
+            this.render();
+          };
+        }
+      }
+    };
+
     // Order items according to sortOrder setting
     if (this.settings.sortOrder === 'folders-first') {
       renderIndexedChildFolders();
       renderUnindexedTrees();
       renderDirectFiles();
+      renderCustomOverrideFiles();
     } else if (this.settings.sortOrder === 'files-first') {
       renderDirectFiles();
+      renderCustomOverrideFiles();
       renderIndexedChildFolders();
       renderUnindexedTrees();
     } else {
       renderIndexedChildFolders();
       renderUnindexedTrees();
       renderDirectFiles();
+      renderCustomOverrideFiles();
     }
 
     const hasAnyContent =
       node.indexedChildFolders.length > 0 ||
       node.unindexedTrees.length > 0 ||
-      node.directFiles.length > 0;
+      node.directFiles.length > 0 ||
+      Boolean(
+        this.settings.customLinkOverrides &&
+          Object.values(this.settings.customLinkOverrides).includes(node.folderPath)
+      );
 
     if (!hasAnyContent) {
       body.createDiv({ cls: 'graphway-empty-note', text: '*(No child notes or folders)*' });

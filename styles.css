@@ -338,6 +338,36 @@
   transform: scale(1.2);
 }
 
+.graphway-custom-override-row {
+  background: rgba(56, 189, 248, 0.08);
+  border-left: 2px solid #38bdf8;
+}
+
+.graphway-custom-override-row:hover {
+  background: rgba(56, 189, 248, 0.16);
+}
+
+.graphway-custom-override-name {
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.graphway-mini-remove {
+  margin-left: auto;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding: 0 4px;
+  transition: all 0.15s ease;
+}
+
+.graphway-mini-remove:hover {
+  opacity: 1;
+  color: #ef4444;
+  transform: scale(1.2);
+}
+
 .graphway-node-header-actions {
   display: flex;
   align-items: center;

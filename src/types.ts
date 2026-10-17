@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: GraphWaySettings = {
   suffixString: '---',
   createMissingFolderNotes: true,
   folderNoteInsideFolder: true,
-  defaultTemplate: '# {{title}}\n\n%% Begin GraphWay %%\n%% End GraphWay %%\n',
+  defaultTemplate: '%% Begin GraphWay %%\n%% End GraphWay %%\n',
   beginMarker: '%% Begin GraphWay %%',
   endMarker: '%% End GraphWay %%',
   bubbleUpOrphans: true,

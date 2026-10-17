@@ -33,7 +33,7 @@ var DEFAULT_SETTINGS = {
   suffixString: "---",
   createMissingFolderNotes: true,
   folderNoteInsideFolder: true,
-  defaultTemplate: "# {{title}}\n\n%% Begin GraphWay %%\n%% End GraphWay %%\n",
+  defaultTemplate: "%% Begin GraphWay %%\n%% End GraphWay %%\n",
   beginMarker: "%% Begin GraphWay %%",
   endMarker: "%% End GraphWay %%",
   bubbleUpOrphans: true,
@@ -785,11 +785,13 @@ var VaultSynchronizer = class {
           if (!existingNote) {
             const targetPath = (0, import_obsidian4.normalizePath)(this.resolver.computeDefaultFolderNotePath(folder));
             const existingFile = this.app.vault.getAbstractFileByPath(targetPath);
-            if (!existingFile) {
-              const template = this.settings.defaultTemplate.replace(/\{\{title\}\}/g, folder.name);
-              await this.app.vault.create(targetPath, template);
-              createdCount++;
+            let template = this.settings.defaultTemplate || "%% Begin GraphWay %%\n%% End GraphWay %%\n";
+            template = template.replace(/^#+\s*\{\{title\}\}\r?\n+/i, "").replace(/\{\{title\}\}/g, folder.name);
+            if (!template.trim()) {
+              template = "%% Begin GraphWay %%\n%% End GraphWay %%\n";
             }
+            await this.app.vault.create(targetPath, template);
+            createdCount++;
           }
         }
       }
@@ -851,7 +853,11 @@ var VaultSynchronizer = class {
     let file = this.app.vault.getAbstractFileByPath(targetPath);
     if (!file) {
       const title = folder.name || (this.settings.homepageNotePath ? this.settings.homepageNotePath.replace(/\.md$/, "") : "Homepage");
-      const template = this.settings.defaultTemplate.replace(/\{\{title\}\}/g, title);
+      let template = this.settings.defaultTemplate || "%% Begin GraphWay %%\n%% End GraphWay %%\n";
+      template = template.replace(/^#+\s*\{\{title\}\}\r?\n+/i, "").replace(/\{\{title\}\}/g, title);
+      if (!template.trim()) {
+        template = "%% Begin GraphWay %%\n%% End GraphWay %%\n";
+      }
       try {
         file = await this.app.vault.create(targetPath, template);
         new import_obsidian4.Notice(`GraphWay: Created index note "${file.name}"`);
@@ -1735,20 +1741,56 @@ Click to pan canvas to this folder`;
         });
       }
     };
+    const renderCustomOverrideFiles = () => {
+      if (!this.settings.customLinkOverrides) return;
+      for (const [filePath, targetFolder] of Object.entries(this.settings.customLinkOverrides)) {
+        if (targetFolder === node.folderPath && !node.directFiles.includes(filePath)) {
+          const fileName = filePath.split("/").pop()?.replace(/\.md$/, "") || filePath;
+          const itemRow = body.createDiv({ cls: "graphway-item-row graphway-custom-override-row" });
+          itemRow.setAttribute("data-filepath", filePath);
+          itemRow.createSpan({ text: "\u{1F517} \u{1F4C4}", cls: "graphway-item-icon" });
+          const nameSpan = itemRow.createSpan({
+            text: `${fileName} (Custom Link)`,
+            cls: "graphway-item-name graphway-custom-override-name"
+          });
+          nameSpan.title = `External linked file: ${filePath}
+Click to open
+Click \u2715 to remove link`;
+          nameSpan.onclick = () => {
+            const f = this.app.vault.getAbstractFileByPath(filePath);
+            if (f instanceof import_obsidian7.TFile) this.app.workspace.getLeaf().openFile(f);
+          };
+          const removeBtn = itemRow.createSpan({ text: "\u2715", cls: "graphway-mini-remove" });
+          removeBtn.title = "Remove custom link";
+          removeBtn.onclick = async (e) => {
+            e.stopPropagation();
+            delete this.settings.customLinkOverrides[filePath];
+            await this.onSettingsChange();
+            await this.synchronizer.syncExistingIndices();
+            this.render();
+          };
+        }
+      }
+    };
     if (this.settings.sortOrder === "folders-first") {
       renderIndexedChildFolders();
       renderUnindexedTrees();
       renderDirectFiles();
+      renderCustomOverrideFiles();
     } else if (this.settings.sortOrder === "files-first") {
       renderDirectFiles();
+      renderCustomOverrideFiles();
       renderIndexedChildFolders();
       renderUnindexedTrees();
     } else {
       renderIndexedChildFolders();
       renderUnindexedTrees();
       renderDirectFiles();
+      renderCustomOverrideFiles();
     }
-    const hasAnyContent = node.indexedChildFolders.length > 0 || node.unindexedTrees.length > 0 || node.directFiles.length > 0;
+    const hasAnyContent = node.indexedChildFolders.length > 0 || node.unindexedTrees.length > 0 || node.directFiles.length > 0 || Boolean(
+      this.settings.customLinkOverrides && Object.values(this.settings.customLinkOverrides).includes(node.folderPath)
+    );
     if (!hasAnyContent) {
       body.createDiv({ cls: "graphway-empty-note", text: "*(No child notes or folders)*" });
     }
