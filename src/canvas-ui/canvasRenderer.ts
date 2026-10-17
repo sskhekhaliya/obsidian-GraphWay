@@ -556,13 +556,18 @@ export class CanvasRenderer {
       text: isHomepage ? '🏠 HOMEPAGE' : node.hasIndex ? 'INDEXED' : 'NO INDEX'
     });
     badge.title = node.hasIndex
-      ? `Folder Note: ${node.indexFilePath}\nClick to open`
-      : 'Click to create folder index note';
+      ? `Index note: ${node.indexFilePath}\nClick to convert into a normal file (unindex folder)`
+      : 'Click to create/assign folder index note';
 
     badge.onclick = async (e) => {
       e.stopPropagation();
-      await this.handleCreateOrOpenIndex(node);
+      if (node.hasIndex) {
+        await this.handleDetachIndex(node);
+      } else {
+        await this.handleCreateOrOpenIndex(node);
+      }
     };
+
 
     // 3. Node Body (Files and Links list - mirrors exactly what is generated in %% Begin GraphWay %%)
     const body = card.createDiv({ cls: 'graphway-node-body' });
@@ -1001,6 +1006,12 @@ export class CanvasRenderer {
    * Opens the index note if it exists, or creates it if missing
    */
   private async handleCreateOrOpenIndex(node: FolderHierarchyNode): Promise<void> {
+    // If the folder was marked as unindexed, re-enable it
+    if (this.settings.unindexedFolderPaths && this.settings.unindexedFolderPaths.includes(node.folderPath)) {
+      this.settings.unindexedFolderPaths = this.settings.unindexedFolderPaths.filter(p => p !== node.folderPath);
+      await this.onSettingsChange();
+    }
+
     if (node.hasIndex && node.indexFilePath) {
       const file = this.app.vault.getAbstractFileByPath(node.indexFilePath);
       if (file instanceof TFile) {
@@ -1032,5 +1043,20 @@ export class CanvasRenderer {
       }
     }
   }
+
+  /**
+   * Converts an indexed folder note into a normal file, unindexing the folder
+   */
+  private async handleDetachIndex(node: FolderHierarchyNode): Promise<void> {
+    const fileName = node.indexFilePath ? node.indexFilePath.split('/').pop() : 'index note';
+    await this.synchronizer.detachFolderNote(node.folderPath, node.indexFilePath);
+    await this.onSettingsChange();
+
+    new Notice(`GraphWay: Converted "${fileName}" to a normal file. Folder is now unindexed.`);
+
+    const hierarchy = this.synchronizer.getHierarchyBuilder().buildVaultHierarchy();
+    this.updateData(hierarchy);
+  }
 }
+
 

@@ -32,6 +32,8 @@ export interface GraphWaySettings {
   folderToFileConnections: { folderPath: string; filePath: string }[];
   // Custom manual links: maps a filePath to a specific target folder path
   customLinkOverrides: Record<string, string>;
+  // Folders explicitly marked as unindexed (normal notes instead of folder notes)
+  unindexedFolderPaths: string[];
   // Saved canvas node positions: key is folderPath
   nodePositions: Record<string, { x: number; y: number }>;
 }
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: GraphWaySettings = {
   customFolderEdges: [],
   folderToFileConnections: [],
   customLinkOverrides: {},
+  unindexedFolderPaths: [],
   nodePositions: {}
 };
 

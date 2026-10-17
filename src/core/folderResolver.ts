@@ -103,6 +103,11 @@ export class FolderResolver {
    * Finds the folder note for a given TFolder, if one exists.
    */
   public findFolderNote(folder: TFolder): TFile | null {
+    // If user explicitly marked this folder as unindexed, do not resolve any folder note
+    if (this.settings.unindexedFolderPaths && this.settings.unindexedFolderPaths.includes(folder.path)) {
+      return null;
+    }
+
     // If inside folder, check children of folder
     if (this.settings.folderNoteInsideFolder) {
       for (const child of folder.children) {
