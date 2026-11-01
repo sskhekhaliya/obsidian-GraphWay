@@ -81,6 +81,48 @@ export class CanvasRenderer {
     await this.synchronizer.syncExistingIndices();
   }
 
+  /**
+   * Recursively collects all descendant folder paths connected to or under a given folder
+   */
+  private getDescendantFolderPaths(folderPath: string, visited: Set<string> = new Set()): string[] {
+    const descendants: string[] = [];
+    const node = this.hierarchy.get(folderPath);
+
+    if (node && node.allConnectedChildPaths) {
+      for (const childPath of node.allConnectedChildPaths) {
+        if (!visited.has(childPath)) {
+          visited.add(childPath);
+          descendants.push(childPath);
+          descendants.push(...this.getDescendantFolderPaths(childPath, visited));
+        }
+      }
+    }
+
+    // Also include any folders in vault whose path is a subpath of folderPath
+    const prefix = folderPath === '/' || folderPath === '' ? '' : (folderPath.endsWith('/') ? folderPath : `${folderPath}/`);
+    if (prefix) {
+      for (const key of this.hierarchy.keys()) {
+        if (key && key !== folderPath && key.startsWith(prefix) && !visited.has(key)) {
+          visited.add(key);
+          descendants.push(key);
+        }
+      }
+    }
+
+    return descendants;
+  }
+
+  private countUnindexedFiles(trees: UnindexedFolderTree[]): number {
+    let count = 0;
+    for (const t of trees) {
+      count += (t.files ? t.files.length : 0);
+      if (t.childTrees && t.childTrees.length > 0) {
+        count += this.countUnindexedFiles(t.childTrees);
+      }
+    }
+    return count;
+  }
+
   private buildDOM(): void {
     this.containerEl.empty();
     this.containerEl.addClass('graphway-canvas-root');
@@ -641,28 +683,38 @@ export class CanvasRenderer {
     const headerActions = header.createDiv({ cls: 'graphway-node-header-actions' });
 
     // File visibility toggle button (Icon only)
-    if (node.hasIndex || node.directFiles.length > 0) {
+    if (
+      node.hasIndex ||
+      node.directFiles.length > 0 ||
+      (node.unindexedTrees && node.unindexedTrees.length > 0) ||
+      (node.indexedChildFolders && node.indexedChildFolders.length > 0)
+    ) {
       const renderBtn = headerActions.createSpan({
         cls: `graphway-file-toggle ${isFilesHidden ? 'graphway-file-toggle-off' : 'graphway-file-toggle-on'}`
       });
       setIcon(renderBtn, isFilesHidden ? 'eye-off' : 'eye');
       renderBtn.title = isFilesHidden
-        ? `Direct files: UNRENDERED in "${cleanFolderName}" index note (GraphWay block removed if empty).\nClick to render files.`
-        : `Direct files: RENDERED in "${cleanFolderName}" index note.\nClick to unrender direct files.`;
+        ? `Files in hierarchy: UNRENDERED in "${cleanFolderName}" index note (GraphWay block removed if empty).\nClick to render files for this folder and hierarchy.`
+        : `Files in hierarchy: RENDERED in "${cleanFolderName}" index note.\nClick to unrender files for this folder and hierarchy.`;
 
       renderBtn.onclick = async (e) => {
         e.stopPropagation();
         if (!this.settings.foldersHidingDirectFiles) {
           this.settings.foldersHidingDirectFiles = [];
         }
+        const targetPaths = [node.folderPath, ...this.getDescendantFolderPaths(node.folderPath)];
         if (isFilesHidden) {
           this.settings.foldersHidingDirectFiles = this.settings.foldersHidingDirectFiles.filter(
-            p => p !== node.folderPath
+            p => !targetPaths.includes(p)
           );
-          new Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
+          new Notice(`GraphWay: Now rendering files in "${cleanFolderName}" and hierarchy.`);
         } else {
-          this.settings.foldersHidingDirectFiles.push(node.folderPath);
-          new Notice(`GraphWay: Direct files unrendered from "${cleanFolderName}" index note.`);
+          for (const p of targetPaths) {
+            if (!this.settings.foldersHidingDirectFiles.includes(p)) {
+              this.settings.foldersHidingDirectFiles.push(p);
+            }
+          }
+          new Notice(`GraphWay: Files unrendered in "${cleanFolderName}" and hierarchy.`);
         }
         await this.onSettingsChange();
         await this.synchronizer.syncExistingIndices();
@@ -869,21 +921,24 @@ export class CanvasRenderer {
     // Helper: render direct markdown files
     const renderDirectFiles = () => {
       if (isFilesHidden) {
-        if (node.directFiles.length > 0) {
+        const unindexedFileCount = this.countUnindexedFiles(node.unindexedTrees || []);
+        const totalHiddenCount = node.directFiles.length + unindexedFileCount;
+        if (totalHiddenCount > 0) {
           const itemRow = body.createDiv({ cls: 'graphway-item-row graphway-files-hidden-row' });
           const eyeOffIcon = itemRow.createSpan({ cls: 'graphway-item-icon' });
           setIcon(eyeOffIcon, 'eye-off');
           const nameSpan = itemRow.createSpan({
-            text: `${node.directFiles.length} direct file(s) unrendered`,
+            text: `${totalHiddenCount} file(s) in hierarchy unrendered`,
             cls: 'graphway-item-name graphway-files-hidden-label'
           });
-          nameSpan.title = 'Click to render direct files in index note';
+          nameSpan.title = 'Click to render files in hierarchy';
           nameSpan.onclick = async () => {
+            const targetPaths = [node.folderPath, ...this.getDescendantFolderPaths(node.folderPath)];
             this.settings.foldersHidingDirectFiles = (this.settings.foldersHidingDirectFiles || []).filter(
-              p => p !== node.folderPath
+              p => !targetPaths.includes(p)
             );
             await this.onSettingsChange();
-            new Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
+            new Notice(`GraphWay: Now rendering files in "${cleanFolderName}" and hierarchy.`);
             await this.synchronizer.syncExistingIndices();
             this.render();
           };
@@ -988,29 +1043,31 @@ export class CanvasRenderer {
     // Order items according to sortOrder setting
     if (this.settings.sortOrder === 'folders-first') {
       renderIndexedChildFolders();
-      renderUnindexedTrees();
+      if (!isFilesHidden) renderUnindexedTrees();
       renderDirectFiles();
-      renderCustomOverrideFiles();
+      if (!isFilesHidden) renderCustomOverrideFiles();
     } else if (this.settings.sortOrder === 'files-first') {
       renderDirectFiles();
-      renderCustomOverrideFiles();
+      if (!isFilesHidden) renderCustomOverrideFiles();
       renderIndexedChildFolders();
-      renderUnindexedTrees();
+      if (!isFilesHidden) renderUnindexedTrees();
     } else {
       renderIndexedChildFolders();
-      renderUnindexedTrees();
+      if (!isFilesHidden) renderUnindexedTrees();
       renderDirectFiles();
-      renderCustomOverrideFiles();
+      if (!isFilesHidden) renderCustomOverrideFiles();
     }
 
     const hasAnyContent =
       node.indexedChildFolders.length > 0 ||
-      node.unindexedTrees.length > 0 ||
-      node.directFiles.length > 0 ||
+      (!isFilesHidden && node.unindexedTrees.length > 0) ||
+      (!isFilesHidden && node.directFiles.length > 0) ||
       Boolean(
-        this.settings.customLinkOverrides &&
+        !isFilesHidden &&
+          this.settings.customLinkOverrides &&
           Object.values(this.settings.customLinkOverrides).includes(node.folderPath)
-      );
+      ) ||
+      (isFilesHidden && (node.directFiles.length > 0 || (node.unindexedTrees && node.unindexedTrees.length > 0)));
 
     if (!hasAnyContent) {
       body.createDiv({ cls: 'graphway-empty-note', text: '*(No child notes or folders)*' });

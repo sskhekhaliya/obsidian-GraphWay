@@ -199,7 +199,7 @@ export class MarkdownGenerator {
     // 3. Unindexed subfolder items
     const unindexedItems: GraphWayItem[] = [];
 
-    if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
+    if (!isFilesHidden && this.settings.bubbleUpOrphans && node.unindexedTrees) {
       for (const tree of node.unindexedTrees) {
         unindexedItems.push(...this.collectUnindexedItems(tree, node.folderPath));
       }
@@ -259,8 +259,11 @@ export class MarkdownGenerator {
   ): string {
     const lines: string[] = [];
     const unindexedLines: string[] = [];
+    const isFilesHidden =
+      this.settings.foldersHidingDirectFiles &&
+      this.settings.foldersHidingDirectFiles.includes(node.folderPath);
 
-    if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
+    if (!isFilesHidden && this.settings.bubbleUpOrphans && node.unindexedTrees) {
       for (const tree of node.unindexedTrees) {
         unindexedLines.push(...this.renderUnindexedTree(tree, 0, node.folderPath));
       }

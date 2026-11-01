@@ -527,7 +527,7 @@ var MarkdownGenerator = class {
       }
     }
     const unindexedItems = [];
-    if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
+    if (!isFilesHidden && this.settings.bubbleUpOrphans && node.unindexedTrees) {
       for (const tree of node.unindexedTrees) {
         unindexedItems.push(...this.collectUnindexedItems(tree, node.folderPath));
       }
@@ -572,7 +572,8 @@ var MarkdownGenerator = class {
   renderListLayout(node, folderItems, fileItems) {
     const lines = [];
     const unindexedLines = [];
-    if (this.settings.bubbleUpOrphans && node.unindexedTrees) {
+    const isFilesHidden = this.settings.foldersHidingDirectFiles && this.settings.foldersHidingDirectFiles.includes(node.folderPath);
+    if (!isFilesHidden && this.settings.bubbleUpOrphans && node.unindexedTrees) {
       for (const tree of node.unindexedTrees) {
         unindexedLines.push(...this.renderUnindexedTree(tree, 0, node.folderPath));
       }
@@ -1199,6 +1200,42 @@ var CanvasRenderer = class {
     this.updateData(hierarchy);
     await this.synchronizer.syncExistingIndices();
   }
+  /**
+   * Recursively collects all descendant folder paths connected to or under a given folder
+   */
+  getDescendantFolderPaths(folderPath, visited = /* @__PURE__ */ new Set()) {
+    const descendants = [];
+    const node = this.hierarchy.get(folderPath);
+    if (node && node.allConnectedChildPaths) {
+      for (const childPath of node.allConnectedChildPaths) {
+        if (!visited.has(childPath)) {
+          visited.add(childPath);
+          descendants.push(childPath);
+          descendants.push(...this.getDescendantFolderPaths(childPath, visited));
+        }
+      }
+    }
+    const prefix = folderPath === "/" || folderPath === "" ? "" : folderPath.endsWith("/") ? folderPath : `${folderPath}/`;
+    if (prefix) {
+      for (const key of this.hierarchy.keys()) {
+        if (key && key !== folderPath && key.startsWith(prefix) && !visited.has(key)) {
+          visited.add(key);
+          descendants.push(key);
+        }
+      }
+    }
+    return descendants;
+  }
+  countUnindexedFiles(trees) {
+    let count = 0;
+    for (const t of trees) {
+      count += t.files ? t.files.length : 0;
+      if (t.childTrees && t.childTrees.length > 0) {
+        count += this.countUnindexedFiles(t.childTrees);
+      }
+    }
+    return count;
+  }
   buildDOM() {
     this.containerEl.empty();
     this.containerEl.addClass("graphway-canvas-root");
@@ -1639,27 +1676,32 @@ Right-click for options`;
       this.settings.foldersHidingDirectFiles && this.settings.foldersHidingDirectFiles.includes(node.folderPath)
     );
     const headerActions = header.createDiv({ cls: "graphway-node-header-actions" });
-    if (node.hasIndex || node.directFiles.length > 0) {
+    if (node.hasIndex || node.directFiles.length > 0 || node.unindexedTrees && node.unindexedTrees.length > 0 || node.indexedChildFolders && node.indexedChildFolders.length > 0) {
       const renderBtn = headerActions.createSpan({
         cls: `graphway-file-toggle ${isFilesHidden ? "graphway-file-toggle-off" : "graphway-file-toggle-on"}`
       });
       (0, import_obsidian7.setIcon)(renderBtn, isFilesHidden ? "eye-off" : "eye");
-      renderBtn.title = isFilesHidden ? `Direct files: UNRENDERED in "${cleanFolderName}" index note (GraphWay block removed if empty).
-Click to render files.` : `Direct files: RENDERED in "${cleanFolderName}" index note.
-Click to unrender direct files.`;
+      renderBtn.title = isFilesHidden ? `Files in hierarchy: UNRENDERED in "${cleanFolderName}" index note (GraphWay block removed if empty).
+Click to render files for this folder and hierarchy.` : `Files in hierarchy: RENDERED in "${cleanFolderName}" index note.
+Click to unrender files for this folder and hierarchy.`;
       renderBtn.onclick = async (e) => {
         e.stopPropagation();
         if (!this.settings.foldersHidingDirectFiles) {
           this.settings.foldersHidingDirectFiles = [];
         }
+        const targetPaths = [node.folderPath, ...this.getDescendantFolderPaths(node.folderPath)];
         if (isFilesHidden) {
           this.settings.foldersHidingDirectFiles = this.settings.foldersHidingDirectFiles.filter(
-            (p) => p !== node.folderPath
+            (p) => !targetPaths.includes(p)
           );
-          new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
+          new import_obsidian7.Notice(`GraphWay: Now rendering files in "${cleanFolderName}" and hierarchy.`);
         } else {
-          this.settings.foldersHidingDirectFiles.push(node.folderPath);
-          new import_obsidian7.Notice(`GraphWay: Direct files unrendered from "${cleanFolderName}" index note.`);
+          for (const p of targetPaths) {
+            if (!this.settings.foldersHidingDirectFiles.includes(p)) {
+              this.settings.foldersHidingDirectFiles.push(p);
+            }
+          }
+          new import_obsidian7.Notice(`GraphWay: Files unrendered in "${cleanFolderName}" and hierarchy.`);
         }
         await this.onSettingsChange();
         await this.synchronizer.syncExistingIndices();
@@ -1816,21 +1858,24 @@ Click to pan canvas to this folder`;
     };
     const renderDirectFiles = () => {
       if (isFilesHidden) {
-        if (node.directFiles.length > 0) {
+        const unindexedFileCount = this.countUnindexedFiles(node.unindexedTrees || []);
+        const totalHiddenCount = node.directFiles.length + unindexedFileCount;
+        if (totalHiddenCount > 0) {
           const itemRow = body.createDiv({ cls: "graphway-item-row graphway-files-hidden-row" });
           const eyeOffIcon = itemRow.createSpan({ cls: "graphway-item-icon" });
           (0, import_obsidian7.setIcon)(eyeOffIcon, "eye-off");
           const nameSpan = itemRow.createSpan({
-            text: `${node.directFiles.length} direct file(s) unrendered`,
+            text: `${totalHiddenCount} file(s) in hierarchy unrendered`,
             cls: "graphway-item-name graphway-files-hidden-label"
           });
-          nameSpan.title = "Click to render direct files in index note";
+          nameSpan.title = "Click to render files in hierarchy";
           nameSpan.onclick = async () => {
+            const targetPaths = [node.folderPath, ...this.getDescendantFolderPaths(node.folderPath)];
             this.settings.foldersHidingDirectFiles = (this.settings.foldersHidingDirectFiles || []).filter(
-              (p) => p !== node.folderPath
+              (p) => !targetPaths.includes(p)
             );
             await this.onSettingsChange();
-            new import_obsidian7.Notice(`GraphWay: Now rendering direct files in "${cleanFolderName}" index note.`);
+            new import_obsidian7.Notice(`GraphWay: Now rendering files in "${cleanFolderName}" and hierarchy.`);
             await this.synchronizer.syncExistingIndices();
             this.render();
           };
@@ -1919,23 +1964,23 @@ Click to remove link`;
     };
     if (this.settings.sortOrder === "folders-first") {
       renderIndexedChildFolders();
-      renderUnindexedTrees();
+      if (!isFilesHidden) renderUnindexedTrees();
       renderDirectFiles();
-      renderCustomOverrideFiles();
+      if (!isFilesHidden) renderCustomOverrideFiles();
     } else if (this.settings.sortOrder === "files-first") {
       renderDirectFiles();
-      renderCustomOverrideFiles();
+      if (!isFilesHidden) renderCustomOverrideFiles();
       renderIndexedChildFolders();
-      renderUnindexedTrees();
+      if (!isFilesHidden) renderUnindexedTrees();
     } else {
       renderIndexedChildFolders();
-      renderUnindexedTrees();
+      if (!isFilesHidden) renderUnindexedTrees();
       renderDirectFiles();
-      renderCustomOverrideFiles();
+      if (!isFilesHidden) renderCustomOverrideFiles();
     }
-    const hasAnyContent = node.indexedChildFolders.length > 0 || node.unindexedTrees.length > 0 || node.directFiles.length > 0 || Boolean(
-      this.settings.customLinkOverrides && Object.values(this.settings.customLinkOverrides).includes(node.folderPath)
-    );
+    const hasAnyContent = node.indexedChildFolders.length > 0 || !isFilesHidden && node.unindexedTrees.length > 0 || !isFilesHidden && node.directFiles.length > 0 || Boolean(
+      !isFilesHidden && this.settings.customLinkOverrides && Object.values(this.settings.customLinkOverrides).includes(node.folderPath)
+    ) || isFilesHidden && (node.directFiles.length > 0 || node.unindexedTrees && node.unindexedTrees.length > 0);
     if (!hasAnyContent) {
       body.createDiv({ cls: "graphway-empty-note", text: "*(No child notes or folders)*" });
     }
